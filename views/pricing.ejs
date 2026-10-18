@@ -1,0 +1,60 @@
+<%- include('partials/head', { title }) %>
+
+<section class="py-6 md:py-10">
+
+  <!-- Heading -->
+  <div class="text-center max-w-2xl mx-auto mb-12">
+    <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-neutral-900">Simple plans for every turf</h1>
+    <p class="mt-4 text-lg text-neutral-600 leading-relaxed">Start with Basic and upgrade as your business grows. Prices are per month.</p>
+  </div>
+
+  <!-- Plans -->
+  <div class="grid md:grid-cols-3 gap-6 items-stretch max-w-5xl mx-auto">
+    <%
+      const plans = [
+        { name: 'Basic', price: '499', desc: 'For a professional online presence', features: ['Ready-made mobile website', 'SquareTurf subdomain', '1 ground / pitch', '10 gallery photos', 'Manual bookings', 'Basic dashboard', 'Email support'] },
+        { name: 'Standard', price: '999', desc: 'For growing turf businesses', features: ['Everything in Basic', 'Live slot availability', 'Online booking', 'Payment integration', 'Offers and reports'] },
+        { name: 'Premium', price: '1,999', desc: 'For established businesses', features: ['Everything in Standard', 'Multiple grounds', 'Staff accounts', 'Advanced analytics', 'Priority support'] }
+      ];
+      plans.forEach((p, i) => {
+        const featured = i === 1;
+    %>
+      <article class="relative flex flex-col rounded-2xl bg-white p-7 <%= featured ? 'ring-2 ring-blue-600 shadow-xl shadow-neutral-900/10' : 'ring-1 ring-neutral-200 shadow-sm' %>">
+
+        <% if (featured) { %>
+          <span class="absolute -top-3 left-7 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Most popular</span>
+        <% } %>
+
+        <h2 class="text-lg font-bold text-neutral-900"><%= p.name %></h2>
+        <p class="mt-1 text-sm text-neutral-600"><%= p.desc %></p>
+
+        <p class="mt-6 flex items-baseline gap-1">
+          <span class="text-5xl font-extrabold tracking-tight text-neutral-900">₹<%= p.price %></span>
+          <span class="text-sm text-neutral-500">/ month</span>
+        </p>
+
+        <a href="/register"
+           class="mt-6 block rounded-lg py-3 text-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 <%= featured ? 'bg-neutral-900 text-white hover:bg-neutral-700' : 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50' %>">
+          Get started with <%= p.name %>
+        </a>
+
+        <ul class="mt-7 pt-7 border-t border-neutral-200 space-y-3 flex-1">
+          <% p.features.forEach(f => { %>
+            <li class="flex items-start gap-3 text-sm text-neutral-700">
+              <i data-lucide="check" class="w-4 h-4 mt-0.5 shrink-0 text-blue-600"></i>
+              <span><%= f %></span>
+            </li>
+          <% }) %>
+        </ul>
+      </article>
+    <% }) %>
+  </div>
+
+  <!-- Note -->
+  <p class="text-center text-xs text-neutral-500 mt-8 max-w-xl mx-auto leading-relaxed">
+    Illustrative prices. Online payments and subscription billing require payment-gateway configuration.
+  </p>
+
+</section>
+
+<%- include('partials/foot') %>

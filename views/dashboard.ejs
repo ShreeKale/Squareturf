@@ -1,0 +1,532 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  /* ---------- View data ---------- */
+  const a = analytics;
+
+  const planPrices = { basic: 499, standard: 999, premium: 1999 };
+  const planKey    = String(tenant.plan || '').toLowerCase();
+  const planPrice  = planPrices[planKey];
+  const planName   = planKey ? planKey.charAt(0).toUpperCase() + planKey.slice(1) : '—';
+
+  const siteHost = `${tenant.slug}.${baseDomain}`;
+  const siteUrl  = `http://${siteHost}:${process.env.PORT || 5000}`;
+
+  /* Trial status */
+  const trialEnd = tenant.trialEndsAt ? new Date(tenant.trialEndsAt) : null;
+  const daysLeft = trialEnd ? Math.ceil((trialEnd - new Date()) / 86400000) : null;
+  const trialText = daysLeft === null ? '—'
+    : daysLeft > 0 ? `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`
+    : 'Trial ended';
+  const trialSub = trialEnd ? `Ends ${trialEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'No trial on this account';
+
+  /* Formatting */
+  const inr = (value) => '₹' + (Number(value) || 0).toLocaleString('en-IN');
+  const fmtDate = (value) => new Date(value + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const fmtDay = (value) => new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const fmtTime = (value) => {
+    const [h, m] = value.split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  };
+  const barHeight = (count, max) => (count && max ? Math.max(6, Math.round((count / max) * 100)) : 0);
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  /* Styles */
+  const statusStyles = {
+    confirmed: { badge: 'bg-green-50 text-green-700 ring-green-600/20', dot: 'bg-green-500', bar: 'bg-green-500' },
+    pending:   { badge: 'bg-amber-50 text-amber-700 ring-amber-600/20', dot: 'bg-amber-500', bar: 'bg-amber-400' },
+    cancelled: { badge: 'bg-red-50 text-red-700 ring-red-600/20',       dot: 'bg-red-500',   bar: 'bg-red-400' },
+    completed: { badge: 'bg-blue-50 text-blue-700 ring-blue-600/20',    dot: 'bg-blue-500',  bar: 'bg-blue-500' }
+  };
+  const fallbackStatus = { badge: 'bg-neutral-100 text-neutral-700 ring-neutral-500/20', dot: 'bg-neutral-400', bar: 'bg-neutral-400' };
+
+  const card      = 'rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200';
+  const cardTitle = 'text-base font-bold text-neutral-900';
+  const rangeLabels = { 7: '7 days', 30: '30 days', 90: '90 days', all: 'All time' };
+
+  /* Row actions for the recent bookings table: [new status, label, style] */
+  const rowActions = {
+    pending:   [['confirmed', 'Confirm', 'primary'], ['cancelled', 'Cancel', 'danger']],
+    confirmed: [['completed', 'Complete', 'neutral'], ['cancelled', 'Cancel', 'danger']],
+    completed: [['confirmed', 'Reopen', 'neutral']],
+    cancelled: [['pending', 'Reopen', 'neutral']]
+  };
+  const buttonBase = 'rounded-md px-2.5 py-1 text-xs font-semibold ring-1 ring-inset transition-colors';
+  const buttonTones = {
+    primary: 'bg-neutral-900 text-white ring-neutral-900 hover:bg-neutral-700',
+    neutral: 'bg-white text-neutral-800 ring-neutral-300 hover:bg-neutral-50',
+    danger:  'bg-white text-red-700 ring-red-300 hover:bg-red-50',
+    paid:    'bg-green-50 text-green-700 ring-green-600/30 hover:bg-green-100'
+  };
+
+  /* Chart scales */
+  const trendMax   = Math.max(0, ...a.trend.map((day) => day.count));
+  const hoursMax   = Math.max(0, ...a.busiestHours.map((hour) => hour.count));
+  const weekdayMax = Math.max(0, ...a.weekdays.map((day) => day.count));
+  const statusTotal = Object.values(a.statusCounts).reduce((total, count) => total + count, 0);
+
+  const kpis = [
+    ['Bookings',      a.totals.bookings,                  'Not cancelled'],
+    ['Hours played',  a.totals.hoursPlayed,               'Booked hours'],
+    ['Occupancy',     a.totals.occupancy + '%',           'Of your open hours'],
+    ['Per day',       a.totals.averagePerDay,             'Average bookings'],
+    ['Collected',     inr(a.totals.collected),            'Marked as paid'],
+    ['To collect',    inr(a.totals.toCollect),            'Confirmed, unpaid'],
+    ['Cancelled',     a.totals.cancelRate + '%',          'Of all requests'],
+    ['Customers',     a.customers.unique,                 plural(a.customers.repeat, 'repeat customer')]
+  ];
+
+  const todayStateStyles = {
+    now:  'bg-green-600 text-white',
+    next: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
+    done: 'bg-neutral-100 text-neutral-500'
+  };
+  const todayStateLabels = { now: 'On ground now', next: 'Up next', done: 'Done' };
+%>
+
+<!-- Header -->
+<div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <p class="text-sm text-neutral-500">Welcome back</p>
+    <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-neutral-900"><%= tenant.name %></h1>
+  </div>
+  <div class="flex flex-wrap gap-3">
+    <a href="<%= siteUrl %>" target="_blank" rel="noreferrer"
+       class="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50">
+      <i data-lucide="external-link" class="h-4 w-4"></i>View website
+    </a>
+    <a href="/dashboard/bookings"
+       class="inline-flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+      <i data-lucide="plus" class="h-4 w-4"></i>Add booking
+    </a>
+  </div>
+</div>
+
+<% if (flash) { %>
+  <div role="status" class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><%= flash %></div>
+<% } %>
+
+<!-- Overview -->
+<section class="<%= card %> mb-6 overflow-hidden" aria-label="Overview">
+  <dl class="grid divide-y divide-neutral-200 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+
+    <div class="p-6">
+      <dt class="text-sm font-medium text-neutral-500">Total bookings</dt>
+      <dd class="mt-2 text-4xl font-extrabold tracking-tight text-neutral-900"><%= total %></dd>
+      <dd class="mt-1 text-sm text-neutral-500">Since you started</dd>
+    </div>
+
+    <div class="p-6">
+      <dt class="text-sm font-medium text-neutral-500">Current plan</dt>
+      <dd class="mt-2 flex items-baseline gap-2">
+        <span class="text-4xl font-extrabold tracking-tight text-neutral-900"><%= planName %></span>
+        <% if (tenant.subscriptionStatus) { %>
+          <span class="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold capitalize text-neutral-600"><%= tenant.subscriptionStatus %></span>
+        <% } %>
+      </dd>
+      <dd class="mt-1 text-sm text-neutral-500">
+        <%= planPrice ? '₹' + planPrice.toLocaleString('en-IN') + ' per month' : 'No active plan' %>
+        <% if (planKey !== 'premium') { %>
+          &middot; <a href="/pricing" class="font-medium text-blue-600 hover:underline">Upgrade</a>
+        <% } %>
+      </dd>
+    </div>
+
+    <div class="p-6">
+      <dt class="text-sm font-medium text-neutral-500">Free trial</dt>
+      <dd class="mt-2 text-4xl font-extrabold tracking-tight <%= daysLeft !== null && daysLeft <= 0 ? 'text-red-600' : 'text-neutral-900' %>"><%= trialText %></dd>
+      <dd class="mt-1 text-sm text-neutral-500"><%= trialSub %></dd>
+    </div>
+
+  </dl>
+</section>
+
+<!-- Needs attention + today on the ground -->
+<div class="mb-10 grid gap-6 lg:grid-cols-[320px_1fr]">
+
+  <section class="<%= card %> p-5" aria-label="Needs attention">
+    <h2 class="<%= cardTitle %>">Needs attention</h2>
+    <ul class="mt-4 space-y-3">
+      <li class="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-inset ring-amber-600/20">
+        <span class="text-sm font-medium text-amber-800">Pending requests</span>
+        <span class="text-2xl font-extrabold text-amber-800"><%= a.pendingRequests %></span>
+      </li>
+      <li class="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3 ring-1 ring-inset ring-neutral-200">
+        <span class="text-sm font-medium text-neutral-700">Upcoming bookings</span>
+        <span class="text-2xl font-extrabold text-neutral-900"><%= a.upcoming %></span>
+      </li>
+      <li class="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3 ring-1 ring-inset ring-neutral-200">
+        <span class="text-sm font-medium text-neutral-700">Playing today</span>
+        <span class="text-2xl font-extrabold text-neutral-900"><%= a.today.length %></span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="<%= card %>" aria-label="Today on the ground">
+    <div class="border-b border-neutral-200 px-5 py-4">
+      <h2 class="<%= cardTitle %>">Today on the ground</h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Who is playing today, in time order.</p>
+    </div>
+
+    <% if (!a.today.length) { %>
+      <p class="px-5 py-10 text-center text-sm text-neutral-500">No bookings for today.</p>
+    <% } else { %>
+      <ul class="divide-y divide-neutral-200">
+        <% a.today.forEach(session => { %>
+          <li class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+            <div class="min-w-0">
+              <p class="font-semibold text-neutral-900"><%= session.customerName %>
+                <span class="font-normal text-neutral-500">&middot; <%= session.customerPhone %></span>
+              </p>
+              <p class="mt-0.5 text-sm text-neutral-600">
+                <%= fmtTime(session.startTime) %> – <%= fmtTime(session.endTime) %>
+                &middot; <%= plural(session.hours, 'hour') %>
+                &middot; <%= inr(session.amount) %> <%= session.paid ? 'paid' : 'unpaid' %>
+                <% if (session.status === 'pending') { %>&middot; <span class="font-medium text-amber-700">awaiting confirmation</span><% } %>
+              </p>
+            </div>
+            <span class="rounded-full px-3 py-1 text-xs font-semibold <%= todayStateStyles[session.state] %>"><%= todayStateLabels[session.state] %></span>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+</div>
+
+<!-- Analytics -->
+<section aria-label="Analytics" class="mb-10">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-bold text-neutral-900">Analytics</h2>
+      <p class="text-sm text-neutral-500"><%= a.periodLabel %>, up to today</p>
+    </div>
+    <nav class="inline-flex rounded-lg bg-white p-1 ring-1 ring-neutral-200" aria-label="Period">
+      <% a.ranges.forEach(key => { %>
+        <a href="/dashboard?range=<%= key %>"
+           class="rounded-md px-3 py-1.5 text-sm font-semibold transition-colors <%= a.range === key ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100' %>"
+           <%= a.range === key ? 'aria-current=page' : '' %>><%= rangeLabels[key] %></a>
+      <% }) %>
+    </nav>
+  </div>
+
+  <!-- Key figures -->
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <% kpis.forEach(([label, value, hint]) => { %>
+      <div class="<%= card %> p-5">
+        <p class="text-sm font-medium text-neutral-500"><%= label %></p>
+        <p class="mt-2 text-3xl font-extrabold tracking-tight text-neutral-900"><%= value %></p>
+        <p class="mt-1 text-xs text-neutral-500"><%= hint %></p>
+      </div>
+    <% }) %>
+  </div>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-3">
+
+    <!-- Bookings per day -->
+    <div class="<%= card %> p-5 lg:col-span-2">
+      <h3 class="<%= cardTitle %>">Bookings per day</h3>
+      <% if (!trendMax) { %>
+        <p class="py-12 text-center text-sm text-neutral-500">No bookings in this period yet.</p>
+      <% } else { %>
+        <div class="mt-5 flex h-36 items-end gap-1" role="img" aria-label="Bookings per day, last <%= a.trend.length %> days">
+          <% a.trend.forEach(day => { %>
+            <div class="flex h-full flex-1 items-end" title="<%= fmtDate(day.date) %>: <%= plural(day.count, 'booking') %>">
+              <div class="w-full rounded-t <%= day.count ? 'bg-blue-600' : 'bg-neutral-200' %>" style="height: <%= day.count ? barHeight(day.count, trendMax) : 3 %>%"></div>
+            </div>
+          <% }) %>
+        </div>
+        <div class="mt-2 flex justify-between text-xs text-neutral-500">
+          <span><%= fmtDate(a.trend[0].date) %></span>
+          <span>Today</span>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Status split -->
+    <div class="<%= card %> p-5">
+      <h3 class="<%= cardTitle %>">Booking status</h3>
+      <% if (!statusTotal) { %>
+        <p class="py-12 text-center text-sm text-neutral-500">Nothing to show yet.</p>
+      <% } else { %>
+        <div class="mt-5 flex h-3 overflow-hidden rounded-full bg-neutral-100">
+          <% Object.entries(a.statusCounts).forEach(([status, count]) => { %>
+            <% if (count) { %>
+              <div class="<%= (statusStyles[status] || fallbackStatus).bar %>" style="width: <%= (count / statusTotal) * 100 %>%" title="<%= status %>: <%= count %>"></div>
+            <% } %>
+          <% }) %>
+        </div>
+        <ul class="mt-4 space-y-2.5 text-sm">
+          <% Object.entries(a.statusCounts).forEach(([status, count]) => { %>
+            <li class="flex items-center justify-between">
+              <span class="flex items-center gap-2 capitalize text-neutral-700">
+                <span class="h-2.5 w-2.5 rounded-full <%= (statusStyles[status] || fallbackStatus).dot %>"></span><%= status %>
+              </span>
+              <span class="font-semibold text-neutral-900"><%= count %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </div>
+
+    <!-- Busiest hours -->
+    <div class="<%= card %> p-5 lg:col-span-2">
+      <h3 class="<%= cardTitle %>">Busiest time slots</h3>
+      <% if (!hoursMax) { %>
+        <p class="py-10 text-center text-sm text-neutral-500">No data yet.</p>
+      <% } else { %>
+        <ul class="mt-4 space-y-2">
+          <% a.busiestHours.forEach(hour => { %>
+            <li class="flex items-center gap-3 text-sm">
+              <span class="w-20 shrink-0 text-neutral-600"><%= fmtTime(hour.startTime) %></span>
+              <span class="h-3 flex-1 overflow-hidden rounded-full bg-neutral-100">
+                <span class="block h-full rounded-full bg-blue-600" style="width: <%= barHeight(hour.count, hoursMax) %>%"></span>
+              </span>
+              <span class="w-8 text-right font-semibold text-neutral-900"><%= hour.count %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </div>
+
+    <!-- Weekdays -->
+    <div class="<%= card %> p-5">
+      <h3 class="<%= cardTitle %>">Busiest days of the week</h3>
+      <% if (!weekdayMax) { %>
+        <p class="py-10 text-center text-sm text-neutral-500">No data yet.</p>
+      <% } else { %>
+        <div class="mt-5 flex h-32 items-end gap-2">
+          <% a.weekdays.forEach(day => { %>
+            <div class="flex h-full flex-1 flex-col items-center justify-end gap-1.5" title="<%= day.label %>: <%= plural(day.count, 'booking') %>">
+              <span class="text-xs font-semibold text-neutral-700"><%= day.count || '' %></span>
+              <div class="w-full rounded-t <%= day.count ? 'bg-blue-600' : 'bg-neutral-200' %>" style="height: <%= day.count ? Math.max(6, Math.round((day.count / weekdayMax) * 80)) : 3 %>%"></div>
+              <span class="text-xs text-neutral-500"><%= day.label %></span>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Top customers -->
+    <div class="<%= card %> lg:col-span-2">
+      <div class="border-b border-neutral-200 px-5 py-4">
+        <h3 class="<%= cardTitle %>">Top customers</h3>
+        <p class="mt-0.5 text-sm text-neutral-500">Ranked by hours played in this period.</p>
+      </div>
+      <% if (!a.customers.top.length) { %>
+        <p class="px-5 py-10 text-center text-sm text-neutral-500">No customers yet.</p>
+      <% } else { %>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[480px] text-left text-sm">
+            <thead class="bg-neutral-50 text-xs font-semibold text-neutral-500">
+              <tr>
+                <th scope="col" class="px-5 py-3">Customer</th>
+                <th scope="col" class="px-4 py-3">Visits</th>
+                <th scope="col" class="px-4 py-3">Hours</th>
+                <th scope="col" class="px-4 py-3">Paid</th>
+                <th scope="col" class="px-4 py-3 pr-5">Last visit</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-neutral-200">
+              <% a.customers.top.forEach(customer => { %>
+                <tr class="hover:bg-neutral-50">
+                  <td class="px-5 py-3">
+                    <p class="font-medium text-neutral-900"><%= customer.name %></p>
+                    <p class="text-neutral-500"><%= customer.phone %></p>
+                  </td>
+                  <td class="px-4 py-3 text-neutral-700"><%= customer.visits %></td>
+                  <td class="px-4 py-3 text-neutral-700"><%= customer.hours %></td>
+                  <td class="px-4 py-3 font-medium text-neutral-900"><%= inr(customer.paid) %></td>
+                  <td class="whitespace-nowrap px-4 py-3 pr-5 text-neutral-600"><%= fmtDate(customer.lastDate) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Payments -->
+    <div class="<%= card %> p-5">
+      <h3 class="<%= cardTitle %>">Payments</h3>
+
+      <% if (!a.payments.count) { %>
+        <p class="py-10 text-center text-sm text-neutral-500">No payments marked yet. Use “Mark paid” on a booking.</p>
+      <% } else { %>
+        <div class="mt-4 rounded-xl bg-green-50 p-4 ring-1 ring-inset ring-green-600/20">
+          <p class="text-xs font-semibold uppercase tracking-wide text-green-700">First payment received</p>
+          <p class="mt-1 font-semibold text-neutral-900"><%= a.payments.first.customerName %></p>
+          <p class="text-sm text-neutral-600">
+            <%= inr(a.payments.first.amount) %> &middot; <%= fmtDay(a.payments.first.paidAt || a.payments.first.createdAt) %>
+          </p>
+        </div>
+
+        <p class="mt-4 text-sm text-neutral-500"><%= plural(a.payments.count, 'payment') %> &middot; <span class="font-semibold text-neutral-900"><%= inr(a.payments.total) %></span> in total</p>
+
+        <p class="mt-4 text-xs font-semibold uppercase tracking-wide text-neutral-500">Latest</p>
+        <ul class="mt-2 divide-y divide-neutral-200 text-sm">
+          <% a.payments.recent.forEach(payment => { %>
+            <li class="flex items-center justify-between gap-3 py-2">
+              <span class="min-w-0 truncate text-neutral-800"><%= payment.customerName %></span>
+              <span class="shrink-0 text-right">
+                <span class="font-semibold text-neutral-900"><%= inr(payment.amount) %></span>
+                <span class="block text-xs text-neutral-500"><%= fmtDay(payment.paidAt || payment.createdAt) %></span>
+              </span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </div>
+
+  </div>
+</section>
+
+<!-- Recent bookings -->
+<section class="<%= card %> mb-10" aria-label="Recent bookings">
+  <div class="flex items-center justify-between border-b border-neutral-200 px-5 py-4 sm:px-6">
+    <div>
+      <h2 class="text-lg font-bold text-neutral-900">Recent bookings</h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Newest first. Confirm, cancel or mark payments right here.</p>
+    </div>
+    <a href="/dashboard/bookings" class="text-sm font-medium text-blue-600 hover:underline">View all</a>
+  </div>
+
+  <% if (!recentBookings.length) { %>
+    <div class="px-5 py-14 text-center">
+      <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
+        <i data-lucide="calendar-x" class="h-6 w-6"></i>
+      </span>
+      <p class="mt-4 font-semibold text-neutral-900">No bookings yet</p>
+      <p class="mt-1 text-sm text-neutral-500">Bookings from your website and the ones you add will show up here.</p>
+      <a href="/dashboard/bookings" class="mt-5 inline-flex rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700">Add a booking</a>
+    </div>
+  <% } else { %>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[900px] text-left text-sm">
+        <thead class="bg-neutral-50 text-xs font-semibold text-neutral-500">
+          <tr>
+            <th scope="col" class="px-5 py-3 sm:px-6">Customer</th>
+            <th scope="col" class="px-4 py-3">When</th>
+            <th scope="col" class="px-4 py-3">Amount</th>
+            <th scope="col" class="px-4 py-3">Payment</th>
+            <th scope="col" class="px-4 py-3">Status</th>
+            <th scope="col" class="px-4 py-3 pr-5 sm:pr-6">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-neutral-200">
+          <% recentBookings.forEach(b => {
+               const s = statusStyles[b.status] || fallbackStatus;
+               const paid = b.paymentStatus === 'paid';
+               const actions = rowActions[b.status] || [];
+               const initial = String(b.customerName || '?').trim().charAt(0).toUpperCase(); %>
+            <tr class="hover:bg-neutral-50">
+              <td class="px-5 py-3.5 sm:px-6">
+                <div class="flex items-center gap-3">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-sm font-semibold text-neutral-600" aria-hidden="true"><%= initial %></span>
+                  <span>
+                    <span class="block font-medium text-neutral-900"><%= b.customerName %></span>
+                    <span class="block text-neutral-500"><%= b.customerPhone %></span>
+                  </span>
+                </div>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3.5 text-neutral-600">
+                <span class="block"><%= fmtDate(b.date) %></span>
+                <span class="block text-neutral-500"><%= fmtTime(b.startTime) %> – <%= fmtTime(b.endTime) %></span>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3.5 font-medium text-neutral-900"><%= inr(b.amount) %></td>
+              <td class="px-4 py-3.5">
+                <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset <%= paid ? 'bg-green-50 text-green-700 ring-green-600/20' : 'bg-neutral-100 text-neutral-600 ring-neutral-500/20' %>"><%= paid ? 'Paid' : 'Unpaid' %></span>
+              </td>
+              <td class="px-4 py-3.5">
+                <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset <%= s.badge %>">
+                  <span class="h-1.5 w-1.5 rounded-full <%= s.dot %>"></span><%= b.status %>
+                </span>
+              </td>
+              <td class="px-4 py-3.5 pr-5 sm:pr-6">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <% actions.forEach(([status, label, tone]) => { %>
+                    <form method="post" action="/dashboard/bookings/<%= b._id %>/status">
+                      <input type="hidden" name="status" value="<%= status %>">
+                      <input type="hidden" name="returnTo" value="/dashboard">
+                      <button type="submit" class="<%= buttonBase %> <%= buttonTones[tone] %>"
+                        <% if (tone === 'danger') { %>onclick="return confirm('Cancel this booking?')"<% } %>><%= label %></button>
+                    </form>
+                  <% }) %>
+
+                  <% if (b.status !== 'cancelled') { %>
+                    <form method="post" action="/dashboard/bookings/<%= b._id %>/payment">
+                      <input type="hidden" name="paymentStatus" value="<%= paid ? 'unpaid' : 'paid' %>">
+                      <input type="hidden" name="returnTo" value="/dashboard">
+                      <button type="submit" class="<%= buttonBase %> <%= paid ? buttonTones.neutral : buttonTones.paid %>"><%= paid ? 'Mark unpaid' : 'Mark paid' %></button>
+                    </form>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<!-- Website + shortcuts -->
+<div class="grid gap-6 md:grid-cols-2">
+
+  <section class="<%= card %> p-5">
+    <h2 class="font-bold text-neutral-900">Your website</h2>
+    <p class="mt-1 text-sm text-neutral-500">Share this link so customers can book slots.</p>
+
+    <div class="mt-4 flex items-center gap-2 rounded-lg bg-neutral-50 py-2 pl-3 pr-2 ring-1 ring-inset ring-neutral-200">
+      <span class="min-w-0 flex-1 truncate text-sm text-neutral-700" title="<%= siteHost %>"><%= siteHost %></span>
+      <button type="button" id="copyLink" data-url="<%= siteUrl %>"
+              class="shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-100">
+        Copy
+      </button>
+    </div>
+
+    <a href="<%= siteUrl %>" target="_blank" rel="noreferrer"
+       class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline">
+      Open website<i data-lucide="arrow-up-right" class="h-4 w-4"></i>
+    </a>
+  </section>
+
+  <section class="<%= card %>">
+    <h2 class="px-5 pt-5 font-bold text-neutral-900">Shortcuts</h2>
+    <ul class="mt-2 divide-y divide-neutral-200 pb-1">
+      <% [
+        ['/dashboard/bookings', 'calendar-days', 'Manage bookings', 'View, add and update bookings'],
+        ['/dashboard/website',  'settings',      'Website settings', 'Photos, prices and timings'],
+        ['/pricing',            'layers',        'Plans & pricing',  'Compare and upgrade your plan']
+      ].forEach(([href, icon, label, hint]) => { %>
+        <li>
+          <a href="<%= href %>" class="group flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-neutral-50">
+            <i data-lucide="<%= icon %>" class="h-5 w-5 shrink-0 text-neutral-500"></i>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-semibold text-neutral-900"><%= label %></span>
+              <span class="block truncate text-xs text-neutral-500"><%= hint %></span>
+            </span>
+            <i data-lucide="chevron-right" class="h-4 w-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5"></i>
+          </a>
+        </li>
+      <% }) %>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  (() => {
+    const btn = document.getElementById('copyLink');
+    if (!btn || !navigator.clipboard) return;
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.url);
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+      } catch (_) { /* clipboard blocked: leave the button as is */ }
+    });
+  })();
+</script>
+
+<%- include('partials/foot') %>

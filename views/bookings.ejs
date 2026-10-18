@@ -1,0 +1,338 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  const statuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+
+  const statusStyles = {
+    pending:   'bg-amber-50 text-amber-700 ring-amber-600/20',
+    confirmed: 'bg-green-50 text-green-700 ring-green-600/20',
+    cancelled: 'bg-red-50 text-red-700 ring-red-600/20',
+    completed: 'bg-blue-50 text-blue-700 ring-blue-600/20'
+  };
+
+  const labelCls = 'block text-sm font-medium text-neutral-700';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+
+  const formatAmount = (value) => '₹' + (Number(value) || 0).toLocaleString('en-IN');
+
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-');
+%>
+
+<!-- Page header -->
+<div class="mb-8 flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <a href="/dashboard" class="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900">
+      <i data-lucide="arrow-left" class="h-4 w-4"></i>Dashboard
+    </a>
+    <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-neutral-900">Bookings</h1>
+    <p class="mt-1 text-neutral-600">Create and manage manual bookings.</p>
+  </div>
+</div>
+
+<!-- Add booking -->
+<section class="mb-8 rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
+  <div class="border-b border-neutral-200 px-5 py-4 sm:px-6">
+    <h2 class="text-lg font-bold text-neutral-900">Add booking</h2>
+    <p class="mt-0.5 text-sm text-neutral-500">Use this for walk-in and phone bookings. Pick a date, then tap the slots to book.</p>
+  </div>
+
+  <form id="addBookingForm" method="post" action="/dashboard/bookings" class="space-y-6 p-5 sm:p-6">
+
+    <!-- Customer -->
+    <div class="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+      <label class="<%= labelCls %>">Customer name
+        <input name="customerName" required autocomplete="off" placeholder="Full name" class="<%= inputCls %>">
+      </label>
+      <label class="<%= labelCls %>">Phone
+        <input name="customerPhone" type="tel" required autocomplete="off" placeholder="Phone number" class="<%= inputCls %>">
+      </label>
+      <label class="<%= labelCls %>">Email <span class="font-normal text-neutral-400">(optional)</span>
+        <input name="customerEmail" type="email" autocomplete="off" placeholder="name@example.com" class="<%= inputCls %>">
+      </label>
+    </div>
+
+    <!-- Date + slots -->
+    <div>
+      <label for="bookingDate" class="<%= labelCls %>">Date</label>
+      <input id="bookingDate" name="date" type="date" required min="<%= today %>" value="<%= today %>" class="<%= inputCls %> sm:max-w-xs">
+
+      <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm font-medium text-neutral-700">Time slots</p>
+        <ul class="flex flex-wrap gap-4 text-xs text-neutral-600" aria-label="Legend">
+          <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
+          <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-neutral-300"></span>Booked</li>
+          <li class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-full bg-blue-600"></span>Selected</li>
+        </ul>
+      </div>
+
+      <div id="slotLoading" class="mt-4 hidden items-center gap-3 text-sm text-neutral-500" role="status">
+        <span class="inline-block h-4 w-4 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600"></span>Checking availability…
+      </div>
+      <div id="slotError" class="mt-4 hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
+
+      <div id="slotGrid" class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"></div>
+
+      <div id="slotEmpty" class="mt-4 hidden rounded-xl border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-500">
+        No bookable slots on this date. Try another day.
+      </div>
+
+      <!-- Selected summary -->
+      <div id="selectionBar" class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-neutral-50 px-4 py-3 text-sm ring-1 ring-inset ring-neutral-200">
+        <p id="selectionText" class="text-neutral-600">No slot selected. Tap consecutive slots to book more than one hour.</p>
+        <button id="clearSelection" type="button" class="hidden text-sm font-semibold text-blue-600 hover:underline">Clear</button>
+      </div>
+
+      <!-- Sent to the server (same fields as before) -->
+      <input type="hidden" name="startTime" id="startTime">
+      <input type="hidden" name="endTime" id="endTime">
+    </div>
+
+    <!-- Amount + notes -->
+    <div class="grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+      <label class="<%= labelCls %>">Amount (₹)
+        <input id="amount" name="amount" type="number" min="0" required value="<%= tenant.pricePerHour %>" class="<%= inputCls %>">
+        <span class="mt-1 block text-xs font-normal text-neutral-500">Fills in automatically from the selected slots. You can edit it.</span>
+      </label>
+      <label class="<%= labelCls %> lg:col-span-2">Notes <span class="font-normal text-neutral-400">(optional)</span>
+        <input name="notes" autocomplete="off" placeholder="Anything the team should know" class="<%= inputCls %>">
+      </label>
+    </div>
+
+    <div id="formMessage" class="hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
+
+    <button id="submitBtn" type="submit" disabled
+      class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-neutral-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 sm:w-auto">
+      <i data-lucide="plus" class="h-4 w-4"></i><span id="submitLabel">Select a slot first</span>
+    </button>
+  </form>
+</section>
+
+<!-- All bookings -->
+<section class="rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200">
+  <div class="flex items-center justify-between border-b border-neutral-200 px-5 py-4 sm:px-6">
+    <h2 class="text-lg font-bold text-neutral-900">All bookings</h2>
+    <span class="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600"><%= bookings.length %> total</span>
+  </div>
+
+  <% if (!bookings.length) { %>
+    <div class="px-5 py-14 text-center">
+      <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-neutral-500">
+        <i data-lucide="calendar-x" class="h-6 w-6"></i>
+      </span>
+      <p class="mt-4 font-semibold text-neutral-900">No bookings yet</p>
+      <p class="mt-1 text-sm text-neutral-500">Bookings you add above will appear here.</p>
+    </div>
+  <% } else { %>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[820px] text-left text-sm">
+        <thead class="bg-neutral-50 text-xs font-semibold text-neutral-500">
+          <tr>
+            <th scope="col" class="px-5 py-3 sm:px-6">Customer</th>
+            <th scope="col" class="px-4 py-3">Date</th>
+            <th scope="col" class="px-4 py-3">Time</th>
+            <th scope="col" class="px-4 py-3">Amount</th>
+            <th scope="col" class="px-4 py-3">Status</th>
+            <th scope="col" class="px-4 py-3 pr-5 sm:pr-6">Update</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-neutral-200">
+          <% bookings.forEach(b => {
+               const status = String(b.status || '').toLowerCase();
+               const badge  = statusStyles[status] || 'bg-neutral-100 text-neutral-700 ring-neutral-500/20'; %>
+            <tr class="hover:bg-neutral-50">
+              <td class="px-5 py-3.5 sm:px-6">
+                <p class="font-medium text-neutral-900"><%= b.customerName %></p>
+                <p class="mt-0.5 text-neutral-500"><%= b.customerPhone %></p>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3.5 text-neutral-600"><%= b.date %></td>
+              <td class="whitespace-nowrap px-4 py-3.5 text-neutral-600"><%= b.startTime %>–<%= b.endTime %></td>
+              <td class="whitespace-nowrap px-4 py-3.5 font-medium text-neutral-900"><%= formatAmount(b.amount) %></td>
+              <td class="px-4 py-3.5">
+                <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ring-1 ring-inset <%= badge %>"><%= b.status %></span>
+              </td>
+              <td class="px-4 py-3.5 pr-5 sm:pr-6">
+                <form method="post" action="/dashboard/bookings/<%= b._id %>/status" class="flex items-center gap-2">
+                  <label class="sr-only" for="status-<%= b._id %>">Status for <%= b.customerName %></label>
+                  <select id="status-<%= b._id %>" name="status" class="rounded-lg border border-neutral-300 bg-white py-1.5 pl-2.5 pr-8 text-sm capitalize text-neutral-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100">
+                    <% statuses.forEach(s => { %>
+                      <option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option>
+                    <% }) %>
+                  </select>
+                  <button type="submit" class="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                    Save
+                  </button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<script>
+  (() => {
+    'use strict';
+
+    const SLUG  = <%- JSON.stringify(tenant.slug) %>;
+    const PRICE = <%= Number(tenant.pricePerHour) || 0 %>;
+
+    const $ = (id) => document.getElementById(id);
+    const el = {
+      form: $('addBookingForm'), date: $('bookingDate'),
+      grid: $('slotGrid'), loading: $('slotLoading'), error: $('slotError'), empty: $('slotEmpty'),
+      text: $('selectionText'), clear: $('clearSelection'),
+      start: $('startTime'), end: $('endTime'), amount: $('amount'),
+      message: $('formMessage'), submit: $('submitBtn'), label: $('submitLabel')
+    };
+
+    /* Slot look for each state (plain Tailwind classes) */
+    const BASE = 'min-h-[68px] rounded-xl border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
+    const STATE = {
+      available: { box: 'border-neutral-300 bg-white hover:border-blue-600 hover:bg-blue-50', tag: 'text-blue-700',  label: 'Available' },
+      selected:  { box: 'border-blue-600 bg-blue-600 text-white shadow-md',                   tag: 'text-blue-100',  label: 'Selected'  },
+      booked:    { box: 'cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400', tag: 'text-neutral-400', label: 'Booked' }
+    };
+
+    let slots = [];            // slots returned for the chosen date
+    let range = null;          // { from, to } indexes into slots, always consecutive
+
+    /* ---------- Helpers ---------- */
+    const formatTime = (value) => {
+      const [h, m] = value.split(':').map(Number);
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+    };
+    const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const isNext = (i) => i > 0 && slots[i].startTime === slots[i - 1].endTime; // slot i follows slot i-1 directly
+
+    /* ---------- Selection (one unbroken block of slots) ---------- */
+    function onSlotClick(i) {
+      if (!range) { range = { from: i, to: i }; }
+      else if (i >= range.from && i <= range.to) {
+        if (range.from === range.to) range = null;                 // tap the only slot: deselect
+        else if (i === range.from) range.from++;                    // shrink from the start
+        else if (i === range.to) range.to--;                        // shrink from the end
+        else range = { from: i, to: i };                            // tap the middle: start over
+      }
+      else if (i === range.to + 1 && isNext(i)) range.to = i;       // extend forward
+      else if (i === range.from - 1 && isNext(range.from)) range.from = i; // extend backward
+      else range = { from: i, to: i };                              // not adjacent: start over
+
+      paint();
+    }
+
+    function paint() {
+      [...el.grid.children].forEach((btn, i) => {
+        if (slots[i].available) {
+          const on = range && i >= range.from && i <= range.to;
+          applyState(btn, on ? 'selected' : 'available');
+        }
+      });
+
+      if (!range) {
+        el.start.value = el.end.value = '';
+        el.text.textContent = 'No slot selected. Tap consecutive slots to book more than one hour.';
+        el.clear.classList.add('hidden');
+        el.submit.disabled = true;
+        el.label.textContent = 'Select a slot first';
+        return;
+      }
+
+      const first = slots[range.from], last = slots[range.to];
+      const count = range.to - range.from + 1;
+
+      el.start.value = first.startTime;
+      el.end.value   = last.endTime;
+      el.amount.value = PRICE * count;
+
+      el.text.innerHTML = '';
+      const strong = document.createElement('strong');
+      strong.className = 'text-neutral-900';
+      strong.textContent = `${formatTime(first.startTime)} – ${formatTime(last.endTime)}`;
+      el.text.append(strong, ` · ${plural(count, 'hour')}`);
+
+      el.clear.classList.remove('hidden');
+      el.submit.disabled = false;
+      el.label.textContent = 'Add booking';
+    }
+
+    /* ---------- Rendering ---------- */
+    function applyState(btn, state) {
+      const s = STATE[state];
+      btn.className = `${BASE} ${s.box}`;
+      const tag = btn.querySelector('[data-tag]');
+      tag.className = `text-[11px] font-semibold uppercase tracking-wide ${s.tag}`;
+      tag.textContent = s.label;
+      btn.setAttribute('aria-pressed', String(state === 'selected'));
+    }
+
+    function makeSlot(slot, i) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+
+      const tag  = document.createElement('div'); tag.dataset.tag = '';
+      const time = document.createElement('div');
+      time.className = 'mt-1 text-sm font-bold';
+      time.textContent = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`;
+      btn.append(tag, time);
+
+      if (slot.available) {
+        applyState(btn, 'available');
+        btn.addEventListener('click', () => onSlotClick(i));
+      } else {
+        applyState(btn, 'booked');
+        btn.disabled = true;
+      }
+      return btn;
+    }
+
+    async function loadSlots() {
+      const date = el.date.value;
+      range = null; slots = [];
+      el.grid.replaceChildren();
+      el.empty.classList.add('hidden');
+      el.error.classList.add('hidden');
+      el.message.classList.add('hidden');
+      paint();
+      if (!date) return;
+
+      el.loading.classList.remove('hidden'); el.loading.classList.add('flex');
+      try {
+        const res = await fetch(`/api/public/${encodeURIComponent(SLUG)}/availability?date=${encodeURIComponent(date)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Unable to load availability.');
+        slots = data.slots || [];
+        el.grid.replaceChildren(...slots.map(makeSlot));
+        el.empty.classList.toggle('hidden', slots.length > 0);
+      } catch (err) {
+        el.error.textContent = err.message || 'Unable to load slots.';
+        el.error.classList.remove('hidden');
+      } finally {
+        el.loading.classList.add('hidden'); el.loading.classList.remove('flex');
+      }
+    }
+
+    /* ---------- Events ---------- */
+    el.date.addEventListener('change', loadSlots);
+    el.clear.addEventListener('click', () => { range = null; paint(); });
+    el.form.addEventListener('submit', (event) => {
+      if (!range) {
+        event.preventDefault();
+        el.message.textContent = 'Please select at least one available slot.';
+        el.message.classList.remove('hidden');
+      }
+    });
+
+    loadSlots();
+  })();
+</script>
+
+<%- include('partials/foot') %>

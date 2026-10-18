@@ -1,0 +1,622 @@
+<%
+  /* ---------- View data ---------- */
+  const name      = tenant.name || 'Turf';
+  const price     = Number(tenant.pricePerHour) || 0;
+  const hasTiming = tenant.openingTime && tenant.closingTime;
+
+  /* Banner photos: the venue's own photos first, otherwise generic turf photos from /public/images/turf/ */
+  const venuePhotos   = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
+  const defaultPhotos = [1, 2, 3, 4, 5, 6].map((n) => `/images/turf/turf-${n}.jpg`);
+  const photos        = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 6);
+
+  const defaultServices = [
+    { icon: '🚗', name: 'Parking',        description: 'Convenient parking available.' },
+    { icon: '💡', name: 'Floodlights',    description: 'Evening and night play supported.' },
+    { icon: '🚻', name: 'Washroom',       description: 'Clean washroom facility.' },
+    { icon: '💧', name: 'Drinking water', description: 'Drinking water available.' }
+  ];
+  const services = Array.isArray(tenant.services) && tenant.services.length
+    ? tenant.services
+    : defaultServices;
+
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0')
+  ].join('-');
+%>
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= name %> | SquareTurf</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['"Bricolage Grotesque"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+    };
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer components {
+      /* Time slot button and its three states */
+      .slot            { @apply min-h-[76px] rounded-xl border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
+      .slot-status     { @apply text-[11px] font-semibold uppercase tracking-wide; }
+      .slot-time       { @apply mt-1 text-sm font-bold; }
+
+      .slot--available { @apply border-neutral-300 bg-white hover:border-blue-600 hover:bg-blue-50; }
+      .slot--available .slot-status { @apply text-blue-700; }
+
+      .slot--selected  { @apply border-blue-600 bg-blue-600 text-white shadow-md; }
+      .slot--selected .slot-status  { @apply text-blue-100; }
+
+      .slot--booked    { @apply cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400; }
+      .slot--booked .slot-status    { @apply text-neutral-400; }
+
+      /* Form fields */
+      .field { @apply w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100; }
+
+      /* Banner carousel */
+      .dot         { @apply h-2 w-2 rounded-full bg-white/50 transition-all hover:bg-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white; }
+      .dot--active { @apply w-6 bg-white; }
+      .arrow       { @apply hidden h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur transition-colors hover:bg-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:flex; }
+    }
+  </style>
+
+  <style>
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader { width: 18px; height: 18px; border: 2px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin .7s linear infinite; }
+    @media (prefers-reduced-motion: reduce) { .loader { animation-duration: 2s; } }
+
+    /* Green turf behind the photos: shows while photos load, or if none can be loaded */
+    .turf-bg {
+      background:
+        radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.25) 100%),
+        repeating-linear-gradient(90deg, #2e8b4a 0 80px, #3aa25b 80px 160px);
+    }
+  </style>
+</head>
+
+<body class="bg-neutral-100 font-sans text-neutral-900 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- Navbar -->
+  <header class="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8" aria-label="Main">
+      <a href="#top" class="flex items-center gap-3">
+        <% if (tenant.logoUrl) { %>
+          <img src="<%= tenant.logoUrl %>" alt="" class="h-10 w-10 rounded-lg object-cover">
+        <% } else { %>
+          <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
+            <%= name.charAt(0).toUpperCase() %>
+          </span>
+        <% } %>
+        <span class="leading-tight">
+          <span class="block font-bold"><%= name %></span>
+          <span class="block text-xs text-neutral-500">Powered by SquareTurf</span>
+        </span>
+      </a>
+
+      <div class="hidden items-center gap-1 text-sm font-medium md:flex">
+        <a href="#booking" class="rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Book</a>
+        <a href="#facilities" class="rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Facilities</a>
+        <a href="#booking" class="ml-2 rounded-lg bg-neutral-900 px-4 py-2 font-semibold text-white hover:bg-neutral-700">Book now</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+
+    <!-- Hero: photo slideshow -->
+    <section class="mx-auto max-w-6xl px-5 pt-6 lg:px-8 lg:pt-8">
+      <div id="heroCarousel" class="relative isolate overflow-hidden rounded-3xl bg-neutral-800"
+           role="region" aria-roledescription="carousel" aria-label="<%= name %> photos">
+
+        <!-- Turf pattern (always behind the photos) -->
+        <div class="turf-bg absolute inset-0 -z-20" aria-hidden="true"></div>
+        <svg class="absolute inset-0 -z-20 h-full w-full" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice"
+             fill="none" stroke="rgba(255,255,255,.5)" stroke-width="3" aria-hidden="true">
+          <rect x="40" y="40" width="720" height="420"/>
+          <line x1="400" y1="40" x2="400" y2="460"/>
+          <circle cx="400" cy="250" r="62"/>
+          <rect x="40" y="150" width="110" height="200"/>
+          <rect x="650" y="150" width="110" height="200"/>
+        </svg>
+
+        <!-- Photos -->
+        <div class="absolute inset-0 -z-10">
+          <% photos.forEach((photo, i) => { %>
+            <img data-slide
+                 src="<%= photo %>"
+                 alt="<%= name %> photo <%= i + 1 %>"
+                 decoding="async"
+                 aria-hidden="<%= i === 0 ? 'false' : 'true' %>"
+                 class="absolute inset-0 h-full w-full object-cover transition-opacity duration-700 motion-reduce:transition-none <%= i === 0 ? 'opacity-100' : 'opacity-0' %>">
+          <% }) %>
+        </div>
+
+        <!-- Shade so the text stays readable on any photo -->
+        <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/85 via-neutral-950/35 to-neutral-950/10"></div>
+
+        <!-- Slide dots (created by the script) -->
+        <div data-dots class="absolute right-5 top-5 flex items-center gap-2" role="group" aria-label="Choose photo"></div>
+
+        <!-- Prev / next -->
+        <button type="button" data-prev aria-label="Previous photo" class="arrow absolute left-4 top-1/2 -translate-y-1/2">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button type="button" data-next aria-label="Next photo" class="arrow absolute right-4 top-1/2 -translate-y-1/2">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+
+        <div class="flex min-h-[320px] flex-col justify-end p-6 text-white sm:p-8 lg:min-h-[380px]">
+          <p class="text-sm font-medium text-blue-200"><%= tenant.sport || 'Sports turf' %></p>
+          <h1 class="mt-2 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl"><%= name %></h1>
+          <% if (tenant.address) { %>
+            <p class="mt-2 max-w-xl text-sm text-neutral-200"><%= tenant.address %></p>
+          <% } %>
+
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <span class="rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur">
+              ₹<%= price.toLocaleString('en-IN') %> <span class="font-normal text-neutral-200">/ hour</span>
+            </span>
+            <% if (hasTiming) { %>
+              <span class="rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur">
+                <%= tenant.openingTime %> – <%= tenant.closingTime %>
+              </span>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Booking: time slots directly below the banner -->
+    <section id="booking" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-10 lg:px-8">
+      <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Select your slots</h2>
+      <p class="mt-2 text-neutral-600">Each slot is one hour. You can select more than one.</p>
+
+      <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+
+        <!-- Slot picker -->
+        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-7">
+          <label for="bookingDate" class="text-sm font-semibold">Date</label>
+          <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="field mt-2 sm:max-w-xs">
+
+          <ul class="mt-6 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
+            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
+            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-neutral-300"></span>Booked</li>
+            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-blue-600"></span>Selected</li>
+          </ul>
+
+          <div id="slotLoading" class="mt-7 hidden items-center gap-3 text-sm text-neutral-500" role="status">
+            <span class="loader"></span>Checking availability…
+          </div>
+          <div id="slotError" class="mt-7 hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
+
+          <div id="slotGrid" class="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
+
+          <div id="slotEmpty" class="mt-7 hidden rounded-xl border border-dashed border-neutral-300 p-8 text-center">
+            <p class="font-semibold">No slots available</p>
+            <p class="mt-1 text-sm text-neutral-500">There are no bookable slots on this date. Try another day.</p>
+          </div>
+        </div>
+
+        <!-- Summary -->
+        <aside class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-200 lg:sticky lg:top-24">
+          <h3 class="text-xl font-bold">Your booking</h3>
+
+          <dl class="mt-5 space-y-4 text-sm">
+            <div><dt class="text-neutral-500">Turf</dt><dd class="mt-0.5 font-medium"><%= name %></dd></div>
+            <div><dt class="text-neutral-500">Date</dt><dd id="summaryDate" class="mt-0.5 font-medium">Select a date</dd></div>
+            <div><dt class="text-neutral-500">Slots</dt><dd id="summaryTime" class="mt-0.5 font-medium">No slots selected</dd></div>
+            <div><dt class="text-neutral-500">Duration</dt><dd id="summaryDuration" class="mt-0.5 font-medium">0 hours</dd></div>
+          </dl>
+
+          <div class="my-5 flex items-baseline justify-between border-t border-neutral-200 pt-5">
+            <span class="text-sm text-neutral-500">Total</span>
+            <span class="text-3xl font-extrabold tracking-tight">₹<span id="summaryPrice">0</span></span>
+          </div>
+
+          <form id="bookingForm" class="space-y-3" novalidate>
+            <input id="customerName"  type="text"  required maxlength="100" autocomplete="name" placeholder="Your name" class="field">
+            <input id="customerPhone" type="tel"   required maxlength="20"  autocomplete="tel"  placeholder="Phone number" class="field">
+            <input id="customerEmail" type="email" autocomplete="email" placeholder="Email (optional)" class="field">
+
+            <div id="bookingMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
+
+            <button id="bookingSubmit" type="submit" disabled
+              class="w-full rounded-lg bg-neutral-900 px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500">
+              Select slots first
+            </button>
+          </form>
+
+          <p class="mt-4 text-center text-xs leading-5 text-neutral-500">The turf owner will confirm your request.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Facilities -->
+    <section id="facilities" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
+      <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Facilities</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <% services.forEach(service => { %>
+          <article class="rounded-2xl bg-white p-5 ring-1 ring-neutral-200">
+            <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-100 text-xl" aria-hidden="true"><%= service.icon || '✓' %></span>
+            <h3 class="mt-4 font-semibold"><%= service.name %></h3>
+            <% if (service.description) { %>
+              <p class="mt-1.5 text-sm leading-relaxed text-neutral-600"><%= service.description %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
+      <div class="max-w-3xl">
+        <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">About the venue</h2>
+        <p class="mt-4 text-lg leading-relaxed text-neutral-600">
+          <%= tenant.description || 'A great place to play, compete and enjoy your game.' %>
+        </p>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <% if (tenant.phone || tenant.email) { %>
+      <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
+        <div class="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-white p-7 ring-1 ring-neutral-200">
+          <div>
+            <h2 class="text-2xl font-bold tracking-tight">Need help with your booking?</h2>
+            <p class="mt-1 text-sm text-neutral-600">Get in touch with the turf directly.</p>
+          </div>
+          <div class="flex gap-3">
+            <% if (tenant.phone) { %>
+              <a href="tel:<%= tenant.phone %>" class="rounded-lg bg-neutral-900 px-5 py-3 text-sm font-semibold text-white hover:bg-neutral-700">Call</a>
+            <% } %>
+            <% if (tenant.email) { %>
+              <a href="mailto:<%= tenant.email %>" class="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50">Email</a>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    <% } %>
+
+    <div class="h-16"></div>
+  </main>
+
+  <footer class="border-t border-neutral-200 bg-white">
+    <p class="mx-auto max-w-6xl px-5 py-6 text-center text-xs text-neutral-500 lg:px-8">
+      &copy; <%= new Date().getFullYear() %> <%= name %> &middot; Powered by SquareTurf
+    </p>
+  </footer>
+
+  <script>
+    /* ================= Banner slideshow ================= */
+    (() => {
+      'use strict';
+
+      const SLIDE_INTERVAL = 3000; // 3 seconds
+
+      const root     = document.getElementById('heroCarousel');
+      const dotsBox  = root.querySelector('[data-dots]');
+      const controls = [...root.querySelectorAll('[data-prev], [data-next]')];
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+      let slides  = [...root.querySelectorAll('[data-slide]')];
+      let current = 0;
+      let timer   = null;
+
+      function show(index) {
+        if (!slides.length) return;
+        current = (index + slides.length) % slides.length;
+
+        slides.forEach((slide, i) => {
+          const active = i === current;
+          slide.classList.toggle('opacity-100', active);
+          slide.classList.toggle('opacity-0', !active);
+          slide.setAttribute('aria-hidden', String(!active));
+        });
+
+        [...dotsBox.children].forEach((dot, i) => {
+          dot.classList.toggle('dot--active', i === current);
+          dot.setAttribute('aria-current', String(i === current));
+        });
+      }
+
+      function buildDots() {
+        dotsBox.replaceChildren(...slides.map((_, i) => {
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'dot';
+          dot.setAttribute('aria-label', `Show photo ${i + 1}`);
+          dot.addEventListener('click', () => { show(i); start(); });
+          return dot;
+        }));
+        const many = slides.length > 1;
+        dotsBox.style.display = many ? '' : 'none';
+        controls.forEach((c) => { c.style.display = many ? '' : 'none'; });
+      }
+
+      const stop = () => { clearInterval(timer); timer = null; };
+
+      function start() {
+        stop();
+        if (slides.length < 2 || reduceMotion.matches || document.hidden) return;
+        timer = setInterval(() => show(current + 1), SLIDE_INTERVAL);
+      }
+
+      /* A photo that fails to load is removed so the slideshow never shows a broken image */
+      function dropSlide(img) {
+        slides = slides.filter((s) => s !== img);
+        img.remove();
+        buildDots();
+        show(Math.min(current, Math.max(slides.length - 1, 0)));
+        start();
+      }
+
+      slides.forEach((img) => {
+        if (img.complete && img.naturalWidth === 0) dropSlide(img);
+        else img.addEventListener('error', () => dropSlide(img), { once: true });
+      });
+
+      root.querySelector('[data-prev]').addEventListener('click', () => { show(current - 1); start(); });
+      root.querySelector('[data-next]').addEventListener('click', () => { show(current + 1); start(); });
+
+      /* Pause while the visitor interacts with the banner, or the tab is hidden */
+      root.addEventListener('mouseenter', stop);
+      root.addEventListener('mouseleave', start);
+      root.addEventListener('focusin', stop);
+      root.addEventListener('focusout', start);
+      document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
+
+      buildDots();
+      show(0);
+      start();
+    })();
+
+    /* ================= Slot booking ================= */
+    (() => {
+      'use strict';
+
+      /* ---------- Config ---------- */
+      const SLUG  = <%- JSON.stringify(tenant.slug) %>;
+      const PRICE = <%= price %>;
+
+      /* ---------- Elements ---------- */
+      const $ = (id) => document.getElementById(id);
+      const el = {
+        date: $('bookingDate'),
+        grid: $('slotGrid'),
+        loading: $('slotLoading'),
+        error: $('slotError'),
+        empty: $('slotEmpty'),
+        summaryDate: $('summaryDate'),
+        summaryTime: $('summaryTime'),
+        summaryDuration: $('summaryDuration'),
+        summaryPrice: $('summaryPrice'),
+        form: $('bookingForm'),
+        submit: $('bookingSubmit'),
+        message: $('bookingMessage'),
+        name: $('customerName'),
+        phone: $('customerPhone'),
+        email: $('customerEmail')
+      };
+
+      /* ---------- State ---------- */
+      let selectedSlots = [];
+
+      const SLOT_STATES = {
+        available: 'Available',
+        selected: 'Selected',
+        booked: 'Booked'
+      };
+
+      /* ---------- Helpers ---------- */
+      const toMinutes = (value) => {
+        const [h, m] = value.split(':').map(Number);
+        return h * 60 + m;
+      };
+
+      const formatDate = (value) =>
+        new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
+          weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        });
+
+      const formatTime = (value) => {
+        const [h, m] = value.split(':').map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+      };
+
+      const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+      const isSameSlot = (a, b) => a.startTime === b.startTime && a.endTime === b.endTime;
+
+      /* Merge back-to-back slots into ranges: 6–7 + 7–8 => "6 pm – 8 pm" */
+      function toRanges(slots) {
+        const sorted = [...slots].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+        const ranges = [];
+        let { startTime: start, endTime: end } = sorted[0];
+
+        for (const slot of sorted.slice(1)) {
+          if (slot.startTime === end) {
+            end = slot.endTime;
+          } else {
+            ranges.push(`${formatTime(start)} – ${formatTime(end)}`);
+            start = slot.startTime;
+            end = slot.endTime;
+          }
+        }
+        ranges.push(`${formatTime(start)} – ${formatTime(end)}`);
+        return ranges;
+      }
+
+      /* ---------- UI updates ---------- */
+      function setLoading(isLoading) {
+        el.loading.classList.toggle('hidden', !isLoading);
+        el.loading.classList.toggle('flex', isLoading);
+      }
+
+      function showError(text) {
+        el.error.textContent = text;
+        el.error.classList.remove('hidden');
+      }
+
+      function showMessage(text, success = false) {
+        el.message.textContent = text;
+        el.message.className = `rounded-lg px-4 py-3 text-sm ${
+          success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+        }`;
+      }
+
+      function updateSummary() {
+        el.summaryDate.textContent = el.date.value ? formatDate(el.date.value) : 'Select a date';
+
+        if (!selectedSlots.length) {
+          el.summaryTime.textContent = 'No slots selected';
+          el.summaryDuration.textContent = '0 hours';
+          el.summaryPrice.textContent = '0';
+          el.submit.disabled = true;
+          el.submit.textContent = 'Select slots first';
+          return;
+        }
+
+        const count = selectedSlots.length;
+        el.summaryTime.textContent = toRanges(selectedSlots).join(', ');
+        el.summaryDuration.textContent = plural(count, 'hour');
+        el.summaryPrice.textContent = (PRICE * count).toLocaleString('en-IN');
+        el.submit.disabled = false;
+        el.submit.textContent = `Request ${plural(count, 'slot')}`;
+      }
+
+      /* ---------- Slots ---------- */
+      function setSlotState(button, state) {
+        button.className = `slot slot--${state}`;
+        button.querySelector('.slot-status').textContent = SLOT_STATES[state];
+        button.setAttribute('aria-pressed', String(state === 'selected'));
+      }
+
+      function toggleSlot(slot, button) {
+        const index = selectedSlots.findIndex((s) => isSameSlot(s, slot));
+
+        if (index >= 0) {
+          selectedSlots.splice(index, 1);
+          setSlotState(button, 'available');
+        } else {
+          selectedSlots.push(slot);
+          setSlotState(button, 'selected');
+        }
+        updateSummary();
+      }
+
+      function createSlotButton(slot) {
+        const button = document.createElement('button');
+        button.type = 'button';
+
+        const status = document.createElement('div');
+        status.className = 'slot-status';
+
+        const time = document.createElement('div');
+        time.className = 'slot-time';
+        time.textContent = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`;
+
+        button.append(status, time);
+
+        if (slot.available) {
+          setSlotState(button, 'available');
+          button.addEventListener('click', () => toggleSlot(slot, button));
+        } else {
+          setSlotState(button, 'booked');
+          button.disabled = true;
+        }
+        return button;
+      }
+
+      function renderSlots(slots) {
+        el.grid.replaceChildren(...slots.map(createSlotButton));
+        el.empty.classList.toggle('hidden', slots.length > 0);
+      }
+
+      async function loadSlots() {
+        const date = el.date.value;
+        if (!date) return;
+
+        selectedSlots = [];
+        updateSummary();
+        el.grid.replaceChildren();
+        el.empty.classList.add('hidden');
+        el.error.classList.add('hidden');
+        setLoading(true);
+
+        try {
+          const response = await fetch(
+            `/api/public/${encodeURIComponent(SLUG)}/availability?date=${encodeURIComponent(date)}`
+          );
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message || 'Unable to load availability.');
+          renderSlots(data.slots || []);
+        } catch (error) {
+          showError(error.message || 'Unable to load slots.');
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      /* ---------- Booking request ---------- */
+      async function submitBooking(event) {
+        event.preventDefault();
+
+        if (!selectedSlots.length) {
+          return showMessage('Please select at least one available slot.');
+        }
+
+        const customerName  = el.name.value.trim();
+        const customerPhone = el.phone.value.trim();
+        const customerEmail = el.email.value.trim();
+
+        if (!customerName || !customerPhone) {
+          return showMessage('Please enter your name and phone number.');
+        }
+
+        el.submit.disabled = true;
+        el.submit.textContent = 'Sending request…';
+
+        try {
+          const response = await fetch(`/public-booking/${encodeURIComponent(SLUG)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customerName,
+              customerPhone,
+              customerEmail,
+              date: el.date.value,
+              slots: selectedSlots.map(({ startTime, endTime }) => ({ startTime, endTime }))
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.message || 'Booking failed.');
+
+          el.form.reset();
+          showMessage(data.message || 'Booking request sent.', true);
+        } catch (error) {
+          showMessage(error.message || 'Something went wrong.');
+        } finally {
+          await loadSlots(); // refresh availability and reset selection either way
+        }
+      }
+
+      /* ---------- Init ---------- */
+      el.date.addEventListener('change', loadSlots);
+      el.form.addEventListener('submit', submitBooking);
+      loadSlots();
+    })();
+  </script>
+
+</body>
+</html>

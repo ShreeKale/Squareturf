@@ -1,0 +1,165 @@
+<%- include('partials/head', { title, fullWidth: true }) %>
+
+<%
+  const previewSlots = [
+    ['6:00 PM', 'open'], ['7:00 PM', 'booked'], ['8:00 PM', 'selected'], ['9:00 PM', 'open'],
+    ['10:00 PM', 'open'], ['11:00 PM', 'booked'], ['12:00 AM', 'open'], ['1:00 AM', 'booked']
+  ];
+  const slotStyles = {
+    open: 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300',
+    booked: 'bg-neutral-100 text-neutral-400 line-through',
+    selected: 'bg-blue-600 text-white ring-1 ring-inset ring-blue-600 shadow-md'
+  };
+
+  const features = [
+    ['globe', 'Ready-made website', 'Get a branded page for your venue with photos, pricing and location, live on your own SquareTurf subdomain.'],
+    ['calendar-days', 'Booking management', 'See open and booked slots at a glance, handle enquiries, and confirm bookings in real time.'],
+    ['layout-dashboard', 'Simple dashboard', 'Set slot prices, review payments, update facility details and control your schedule from one screen.']
+  ];
+
+  const steps = [
+    ['Create your account', 'Sign up and add your turf name, location and photos.'],
+    ['Set your slots and prices', 'Choose opening hours and the hourly rate for your turf.'],
+    ['Share your link', 'Send your website to players and start receiving bookings.']
+  ];
+%>
+
+<style>
+  /* Mown-grass stripes, drawn in CSS so no image file is needed */
+  .turf-bg {
+    background:
+      radial-gradient(ellipse at 70% 50%, rgba(255,255,255,.14), transparent 60%),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.25) 100%),
+      repeating-linear-gradient(90deg, #2e8b4a 0 80px, #3aa25b 80px 160px);
+  }
+  @keyframes st-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .st-rise { animation: st-rise .6s ease-out both; }
+  @media (prefers-reduced-motion: reduce) { .st-rise { animation: none; } }
+</style>
+
+<!-- Hero -->
+<section class="relative overflow-hidden border-b border-neutral-200">
+  <div class="turf-bg absolute inset-0" aria-hidden="true"></div>
+  <svg class="absolute inset-0 h-full w-full" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice"
+       fill="none" stroke="rgba(255,255,255,.55)" stroke-width="3" aria-hidden="true">
+    <rect x="40" y="40" width="720" height="420"/>
+    <line x1="400" y1="40" x2="400" y2="460"/>
+    <circle cx="400" cy="250" r="62"/>
+    <circle cx="400" cy="250" r="4" fill="rgba(255,255,255,.55)"/>
+    <rect x="40" y="150" width="110" height="200"/>
+    <rect x="40" y="200" width="45" height="100"/>
+    <rect x="650" y="150" width="110" height="200"/>
+    <rect x="715" y="200" width="45" height="100"/>
+  </svg>
+  <!-- Dark-green shade behind the text so it stays readable -->
+  <div class="absolute inset-0 bg-gradient-to-r from-emerald-950/100 via-emerald-950/45 to-transparent" aria-hidden="true"></div>
+
+  <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-12 lg:px-8">
+
+    <div class="st-rise lg:col-span-6">
+      <h1 class="text-4xl font-extrabold leading-[1.05] tracking-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
+        Your turf, booked online around the clock.
+      </h1>
+      <p class="mt-6 max-w-xl text-lg leading-relaxed text-emerald-50">
+        Launch a branded website for your turf, let players book open slots themselves, and manage prices, payments and schedules from one dashboard.
+      </p>
+      <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+        <a href="/register" class="inline-flex items-center justify-center rounded-lg bg-white px-6 py-3.5 text-base font-semibold text-neutral-900 transition-colors hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+          Create your turf website
+        </a>
+        <a href="/pricing" class="inline-flex items-center justify-center rounded-lg bg-white/10 px-6 py-3.5 text-base font-semibold text-white ring-1 ring-inset ring-white/70 transition-colors hover:bg-white/20">
+          View pricing
+        </a>
+      </div>
+      <ul class="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white">
+        <li class="flex items-center gap-1.5"><i data-lucide="check" class="h-4 w-4"></i>7-day free trial</li>
+        <li class="flex items-center gap-1.5"><i data-lucide="check" class="h-4 w-4"></i>No credit card needed</li>
+        <li class="flex items-center gap-1.5"><i data-lucide="check" class="h-4 w-4"></i>Set up in minutes</li>
+      </ul>
+    </div>
+
+    <!-- Booking preview -->
+    <div class="st-rise lg:col-span-6" style="animation-delay:.15s">
+      <div class="overflow-hidden rounded-2xl bg-white text-neutral-900 shadow-2xl shadow-black/30 ring-1 ring-neutral-200">
+        <div class="flex items-center gap-1.5 border-b border-neutral-200 bg-neutral-100 px-4 py-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-neutral-300"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-neutral-300"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-neutral-300"></span>
+          <span class="ml-3 flex-1 truncate rounded-md bg-white px-3 py-1 text-xs text-neutral-500">greenfield-arena.squareturf.com</span>
+        </div>
+        <div class="p-5 sm:p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-lg font-bold leading-tight">Greenfield Arena</p>
+              <p class="mt-0.5 text-sm text-neutral-500">5-a-side turf · Saturday</p>
+            </div>
+            <span class="shrink-0 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">₹1,200 / hour</span>
+          </div>
+
+          <div class="mt-5 grid grid-cols-3 gap-2.5 sm:grid-cols-4" role="list" aria-label="Sample time slots">
+            <% previewSlots.forEach(([time, state]) => { %>
+              <div role="listitem" class="rounded-lg px-2 py-2.5 text-center text-sm font-medium <%= slotStyles[state] %>"><%= time %></div>
+            <% }) %>
+          </div>
+
+          <div class="mt-5 flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3 ring-1 ring-inset ring-neutral-200">
+            <p class="text-sm text-neutral-600"><span class="font-semibold text-neutral-900">8:00 PM</span> selected</p>
+            <span class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white">Confirm booking</span>
+          </div>
+        </div>
+      </div>
+      <p class="mt-3 text-center text-xs text-white drop-shadow">Preview of the booking page your customers will see.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features" class="mx-auto max-w-7xl scroll-mt-16 px-4 py-20 sm:px-6 md:py-28 lg:px-8">
+  <div class="max-w-2xl">
+    <h2 class="text-3xl font-extrabold tracking-tight sm:text-4xl">Everything a turf owner needs to take bookings</h2>
+    <p class="mt-4 text-lg leading-relaxed text-neutral-600">Stop managing slots over phone calls and notebooks. SquareTurf keeps your calendar, customers and payments in one place.</p>
+  </div>
+
+  <div class="mt-14 grid gap-x-10 gap-y-12 md:grid-cols-3">
+    <% features.forEach(([icon, heading, text]) => { %>
+      <article class="border-t-2 border-neutral-300 pt-6">
+        <div class="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+          <i data-lucide="<%= icon %>" class="h-5 w-5"></i>
+        </div>
+        <h3 class="mt-5 text-xl font-bold tracking-tight"><%= heading %></h3>
+        <p class="mt-2 leading-relaxed text-neutral-600"><%= text %></p>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how-it-works" class="scroll-mt-16 border-y border-neutral-200 bg-white">
+  <div class="mx-auto max-w-7xl px-4 py-20 sm:px-6 md:py-28 lg:px-8">
+    <h2 class="max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">Go live in three steps</h2>
+    <ol class="mt-12 grid gap-8 md:grid-cols-3">
+      <% steps.forEach(([heading, text], index) => { %>
+        <li class="flex gap-4">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white"><%= index + 1 %></span>
+          <div>
+            <h3 class="text-lg font-bold"><%= heading %></h3>
+            <p class="mt-1.5 leading-relaxed text-neutral-600"><%= text %></p>
+          </div>
+        </li>
+      <% }) %>
+    </ol>
+  </div>
+</section>
+
+<!-- Final call to action -->
+<section class="mx-auto max-w-7xl px-4 py-20 sm:px-6 md:py-24 lg:px-8">
+  <div class="rounded-3xl bg-white px-6 py-14 text-center ring-1 ring-neutral-200 sm:px-14">
+    <h2 class="text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-4xl">Ready to fill your empty slots?</h2>
+    <p class="mx-auto mt-4 max-w-xl text-neutral-600">Start your 7-day free trial. No credit card required.</p>
+    <a href="/register" class="mt-8 inline-flex items-center justify-center rounded-lg bg-neutral-900 px-7 py-3.5 text-base font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+      Create your turf website
+    </a>
+  </div>
+</section>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,63 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  const statuses = ['trial', 'active', 'past_due', 'cancelled', 'suspended'];
+%>
+
+<h1 class="mb-6 text-3xl font-extrabold tracking-tight text-neutral-900">SquareTurf administration</h1>
+
+<div class="mb-8 grid gap-4 sm:grid-cols-3">
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+    <p class="text-sm text-neutral-500">Owners</p>
+    <p class="mt-1 text-3xl font-extrabold"><%= owners %></p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+    <p class="text-sm text-neutral-500">Turf websites</p>
+    <p class="mt-1 text-3xl font-extrabold"><%= tenants.length %></p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+    <p class="text-sm text-neutral-500">Bookings</p>
+    <p class="mt-1 text-3xl font-extrabold"><%= bookings %></p>
+  </div>
+</div>
+
+<section class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200">
+  <h2 class="mb-4 text-xl font-bold">Tenants</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[760px] text-left text-sm">
+      <thead>
+        <tr class="border-b text-neutral-500">
+          <th class="py-2">Turf</th><th>Owner</th><th>Subdomain</th><th>Plan</th><th>Status</th><th>Published</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% tenants.forEach(t => { %>
+          <tr class="border-b">
+            <td class="py-3 font-medium"><%= t.name %></td>
+            <td><%= t.owner ? t.owner.email : '—' %></td>
+            <td><%= t.slug %></td>
+            <td class="capitalize"><%= t.plan %></td>
+            <td class="capitalize"><%= String(t.subscriptionStatus).replace('_', ' ') %></td>
+            <td><%= t.isPublished ? 'Yes' : 'No' %></td>
+            <td>
+              <form method="post" action="/admin/tenants/<%= t._id %>/status" class="flex gap-1">
+                <select name="subscriptionStatus" class="rounded border p-1">
+                  <% statuses.forEach(s => { %>
+                    <option value="<%= s %>" <%= t.subscriptionStatus === s ? 'selected' : '' %>><%= s.replace('_', ' ') %></option>
+                  <% }) %>
+                </select>
+                <select name="isPublished" class="rounded border p-1">
+                  <option value="true"  <%= t.isPublished ? 'selected' : '' %>>Published</option>
+                  <option value="false" <%= !t.isPublished ? 'selected' : '' %>>Hidden</option>
+                </select>
+                <button class="rounded border px-2">Set</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<%- include('partials/foot') %>
