@@ -39,6 +39,7 @@ const {
 const { buildAnalytics } = require('./utils/analytics');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/squareturf';
@@ -91,6 +92,40 @@ app.use((req, res, next) => {
   delete req.session.flash;
 
   next();
+});
+
+/*
+ * Vercel runs this app as a serverless function, so it does not execute
+ * startServer(). Connect to MongoDB on demand and reuse the connection
+ * between warm invocations. Local development is initialized by startServer().
+ */
+let databaseSetupPromise = null;
+
+async function ensureDatabase() {
+  if (mongoose.connection.readyState === 1) return;
+  if (databaseSetupPromise) return databaseSetupPromise;
+
+  databaseSetupPromise = (async () => {
+    await mongoose.connect(MONGO_URI);
+    await seedPlans();
+    await createAdmin();
+    console.log('MongoDB connected and SquareTurf data initialized');
+  })();
+
+  try {
+    await databaseSetupPromise;
+  } finally {
+    databaseSetupPromise = null;
+  }
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await ensureDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use(tenantResolver);
@@ -420,6 +455,7 @@ app.get(
       tenant,
       total: bookings.length,
       analytics,
+      bookings: recentBookings,
       recentBookings
     });
   })
@@ -792,8 +828,23 @@ async function seedPlans() {
 }
 
 async function createAdmin() {
-  const email = (process.env.ADMIN_EMAIL || 'admin@squareturf.com').toLowerCase();
-  const password = process.env.ADMIN_PASSWORD || 'Admin@123';
+  const configuredEmail = process.env.ADMIN_EMAIL;
+  const configuredPassword = process.env.ADMIN_PASSWORD;
+
+  /*
+   * Never create a publicly deployed admin account with a predictable
+   * default password. Set ADMIN_EMAIL and ADMIN_PASSWORD in Vercel instead.
+   */
+  if (
+    process.env.NODE_ENV === 'production' &&
+    (!configuredEmail || !configuredPassword)
+  ) {
+    console.warn('Admin creation skipped: set ADMIN_EMAIL and ADMIN_PASSWORD.');
+    return;
+  }
+
+  const email = (configuredEmail || 'admin@squareturf.com').toLowerCase();
+  const password = configuredPassword || 'Admin@123';
 
   if (await User.exists({ email })) return;
 
@@ -810,11 +861,7 @@ async function createAdmin() {
 
 async function startServer() {
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log('MongoDB connected');
-
-    await seedPlans();
-    await createAdmin();
+    await ensureDatabase();
 
     app.listen(PORT, () => {
       console.log(`SquareTurf running on port ${PORT}`);
@@ -822,8 +869,16 @@ async function startServer() {
     });
   } catch (error) {
     console.error('Failed to start server:', error);
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
-startServer();
+/*
+ * Local: `node server.js` starts a normal HTTP server.
+ * Vercel: imports this Express app as the serverless handler.
+ */
+module.exports = app;
+
+if (require.main === module) {
+  startServer();
+}
