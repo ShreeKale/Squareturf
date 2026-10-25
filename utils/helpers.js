@@ -110,6 +110,66 @@ function normalizeSlots(slots) {
   return result.sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
+/*
+ * Phone numbers: accepts "98765 43210", "+91 98765-43210" or "098765 43210".
+ * Returns the 10 digits, or null when it is not a valid number.
+ */
+function normalizePhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+
+  return /^\d{10}$/.test(digits) ? digits : null;
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(value || ''));
+}
+
+/*
+ * Joins back-to-back hours of one date into a single session
+ * (6-7 pm + 7-8 pm => 6-8 pm), newest date first.
+ */
+function groupConsecutive(bookings) {
+  const sorted = [...bookings].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime)
+  );
+  const groups = [];
+
+  for (const booking of sorted) {
+    const last = groups[groups.length - 1];
+    const continues =
+      last &&
+      last.date === booking.date &&
+      last.status === booking.status &&
+      last.paymentStatus === booking.paymentStatus &&
+      last.endTime === booking.startTime;
+
+    if (continues) {
+      last.endTime = booking.endTime;
+      last.amount += booking.amount;
+    } else {
+      groups.push({
+        date: booking.date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        amount: booking.amount,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus
+      });
+    }
+  }
+
+  for (const group of groups) {
+    group.hours = (toMinutes(group.endTime) - toMinutes(group.startTime)) / 60;
+  }
+
+  return groups.sort(
+    (a, b) => b.date.localeCompare(a.date) || a.startTime.localeCompare(b.startTime)
+  );
+}
+
 /* Photos: one URL per line */
 function parseImages(text) {
   return String(text || '')
@@ -152,7 +212,7 @@ module.exports = {
   MAX_SLOTS_PER_REQUEST,
   asyncHandler,
   cleanSlug,
-    getLocalDateString,
+  getLocalDateString,
   getLocalTimeString,
   isValidDateString,
   isValidTime,
@@ -161,6 +221,9 @@ module.exports = {
   overlaps,
   slotKey,
   normalizeSlots,
+  normalizePhone,
+  isValidEmail,
+  groupConsecutive,
   parseImages,
   parseServices
 };

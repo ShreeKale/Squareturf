@@ -1,0 +1,549 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  /* ---------- Shared styles ---------- */
+  const labelCls = 'block text-sm font-medium text-neutral-800';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+  const hintCls  = 'mt-1.5 block text-xs font-normal text-neutral-500';
+  const primaryBtn = 'rounded-lg bg-neutral-900 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-400';
+  const ghostBtn   = 'rounded-lg px-5 py-3.5 text-sm font-semibold text-neutral-700 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50';
+  const card = 'rounded-2xl bg-white shadow-sm ring-1 ring-neutral-200';
+
+  const v = values || {};
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN');
+  const siteHost = (slug) => `${slug}.${baseDomain}`;
+  const siteUrl  = (slug) => `http://${siteHost(slug)}${baseDomain === 'localhost' ? ':' + port : ''}`;
+
+  const intro = {
+    verify:   ['Verify your email', `We sent a 6-digit code to ${user.email}.`],
+    business: ['Tell us about your turf', 'This is what customers will see on your website.'],
+    grounds:  ['Set up your ground', 'These decide which hourly slots customers can book.'],
+    website:  ['Build your website', 'Add your branding. You can change all of this later.'],
+    plan:     ['Choose your plan', 'Pick what fits today. No payment is taken during sign-up.'],
+    publish:  ['Preview and publish', 'Check how your website looks, then make it live.']
+  }[name];
+
+  const backPath = { business: null, grounds: '/onboarding/business', website: '/onboarding/grounds', plan: '/onboarding/website', publish: '/onboarding/plan' }[name];
+%>
+
+<div class="mx-auto max-w-3xl py-4 sm:py-8">
+
+  <%- include('partials/stepper', { steps, step }) %>
+
+  <div class="mb-6">
+    <h1 class="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl"><%= intro[0] %></h1>
+    <p class="mt-2 text-neutral-600"><%= intro[1] %></p>
+  </div>
+
+  <% if (typeof flash !== 'undefined' && flash) { %>
+    <div role="status" class="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><%= flash %></div>
+  <% } %>
+  <% if (error) { %>
+    <div role="alert" class="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <i data-lucide="circle-alert" class="mt-0.5 h-4 w-4 shrink-0"></i>
+      <span><%= error %></span>
+    </div>
+  <% } %>
+
+  <% if (name === 'verify') { %>
+  <!-- ================= Step 1: verify email ================= -->
+  <div class="<%= card %> p-5 sm:p-6">
+    <% if (!mailConfigured) { %>
+      <p class="mb-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-600/20">
+        Email sending is not set up on this server yet, so the code was printed in the server console.
+      </p>
+    <% } %>
+
+    <form method="post" action="/onboarding/verify" class="space-y-4">
+      <label class="<%= labelCls %>">Verification code
+        <input name="code" required inputmode="numeric" pattern="\d{6}" maxlength="7" autocomplete="one-time-code"
+               placeholder="123456" autofocus
+               class="<%= inputCls %> max-w-xs text-center text-2xl font-bold tracking-[0.4em]">
+        <span class="<%= hintCls %>">The code works for <%= codeMinutes %> minutes.</span>
+      </label>
+      <button type="submit" class="<%= primaryBtn %> w-full sm:w-auto">Verify and continue</button>
+    </form>
+
+    <form method="post" action="/onboarding/verify/resend" class="mt-6 border-t border-neutral-200 pt-5 text-sm text-neutral-600">
+      Did not get it? Check your spam folder, or
+      <button id="resendBtn" type="submit" data-wait="<%= waitSeconds %>"
+              class="font-semibold text-blue-700 underline underline-offset-2 disabled:cursor-not-allowed disabled:text-neutral-400 disabled:no-underline">send a new code</button>.
+    </form>
+  </div>
+
+  <% } else if (name === 'business') { %>
+  <!-- ================= Step 2: business details ================= -->
+  <form method="post" action="/onboarding/business" class="<%= card %> p-5 sm:p-6">
+    <div class="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+      <label class="<%= labelCls %>">Turf or business name
+        <input id="turfName" name="name" required maxlength="120" placeholder="Royal Turf"
+               value="<%= v.name || '' %>" class="<%= inputCls %>">
+      </label>
+
+      <label class="<%= labelCls %>">Sport
+        <select name="sport" class="<%= inputCls %>">
+          <% sports.forEach((s) => { %>
+            <option <%= v.sport === s ? 'selected' : '' %>><%= s %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <div class="sm:col-span-2">
+        <label for="slug" class="<%= labelCls %>">Website address</label>
+        <div class="mt-1.5 flex items-stretch overflow-hidden rounded-lg border border-neutral-300 bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100">
+          <input id="slug" name="slug" required minlength="3" maxlength="40"
+                 placeholder="royalturf" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 value="<%= v.slug || '' %>"
+                 class="min-w-0 flex-1 border-0 bg-transparent px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400">
+          <span class="flex items-center bg-neutral-50 px-3.5 text-sm text-neutral-500">.<%= baseDomain %></span>
+        </div>
+        <p id="slugStatus" class="<%= hintCls %>" aria-live="polite">
+          Your website will be at <strong class="font-semibold text-neutral-800"><span id="slugPreview"><%= v.slug || 'yourturf' %></span>.<%= baseDomain %></strong>.
+          Use 3 to 40 letters, numbers or hyphens.
+        </p>
+      </div>
+
+      <label class="<%= labelCls %> sm:col-span-2">Address
+        <input name="address" required maxlength="300" autocomplete="street-address" placeholder="Street, area, city"
+               value="<%= v.address || '' %>" class="<%= inputCls %>">
+      </label>
+
+      <label class="<%= labelCls %>">Contact phone
+        <input type="tel" name="phone" required inputmode="numeric" autocomplete="tel" placeholder="98765 43210"
+               value="<%= v.phone || '' %>" class="<%= inputCls %>">
+        <span class="<%= hintCls %>">Customers will call or WhatsApp this number.</span>
+      </label>
+
+      <label class="<%= labelCls %>">Contact email
+        <input type="email" name="email" required autocomplete="email" placeholder="turf@example.com"
+               value="<%= v.email || '' %>" class="<%= inputCls %>">
+      </label>
+    </div>
+
+    <div class="mt-7 flex justify-end"><button type="submit" class="<%= primaryBtn %> w-full sm:w-auto">Save and continue</button></div>
+  </form>
+
+  <% } else if (name === 'grounds') { %>
+  <!-- ================= Step 3: ground setup ================= -->
+  <form method="post" action="/onboarding/grounds" class="<%= card %> p-5 sm:p-6">
+    <div class="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+      <label class="<%= labelCls %>">Number of grounds
+        <input id="groundsCount" type="number" name="groundsCount" required min="1" max="20" step="1" inputmode="numeric"
+               value="<%= v.groundsCount || 1 %>" class="<%= inputCls %>">
+        <span class="<%= hintCls %>">Basic includes 1 ground. More grounds need a bigger plan.</span>
+      </label>
+
+      <label class="<%= labelCls %>">Price per hour
+        <div class="relative">
+          <span class="pointer-events-none absolute inset-y-0 left-0 mt-1.5 flex items-center pl-3.5 text-sm text-neutral-500">₹</span>
+          <input type="number" name="pricePerHour" required min="1" step="1" inputmode="numeric" placeholder="800"
+                 value="<%= v.pricePerHour || '' %>" class="<%= inputCls %> pl-8">
+        </div>
+      </label>
+
+      <label class="<%= labelCls %>">Opening time
+        <input id="openingTime" type="time" name="openingTime" required value="<%= v.openingTime || '06:00' %>" class="<%= inputCls %>">
+      </label>
+
+      <label class="<%= labelCls %>">Closing time
+        <input id="closingTime" type="time" name="closingTime" required value="<%= v.closingTime || '23:00' %>" class="<%= inputCls %>">
+      </label>
+    </div>
+
+    <p id="slotCount" class="mt-3 text-sm text-neutral-600" aria-live="polite"></p>
+
+    <fieldset class="mt-6">
+      <legend class="<%= labelCls %>">Days you are open</legend>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <% days.forEach(([key, label]) => { %>
+          <label class="cursor-pointer">
+            <input type="checkbox" name="operatingDays" value="<%= key %>" class="peer sr-only"
+                   <%= (v.operatingDays || []).includes(key) ? 'checked' : '' %>>
+            <span class="block rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+              <%= label.slice(0, 3) %>
+            </span>
+          </label>
+        <% }) %>
+      </div>
+      <p class="mt-3 text-xs text-neutral-500">
+        Quick pick:
+        <button type="button" data-days="all" class="font-semibold text-blue-700 underline underline-offset-2">Every day</button> &middot;
+        <button type="button" data-days="weekdays" class="font-semibold text-blue-700 underline underline-offset-2">Weekdays</button> &middot;
+        <button type="button" data-days="weekend" class="font-semibold text-blue-700 underline underline-offset-2">Weekend</button>
+      </p>
+    </fieldset>
+
+    <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+      <a href="<%= backPath %>" class="<%= ghostBtn %> text-center">Back</a>
+      <button type="submit" class="<%= primaryBtn %>">Save and continue</button>
+    </div>
+  </form>
+
+  <% } else if (name === 'website') { %>
+  <!-- ================= Step 4: website setup ================= -->
+  <form method="post" action="/onboarding/website" enctype="multipart/form-data" class="<%= card %> divide-y divide-neutral-200">
+
+    <!-- Logo -->
+    <section class="p-5 sm:p-6">
+      <h2 class="text-base font-bold text-neutral-900">Logo</h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Square images look best. JPG, PNG or WebP, up to <%= maxImageMb %> MB.</p>
+
+      <div class="mt-4 flex items-center gap-4">
+        <span id="logoBox" class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-neutral-100 text-2xl font-bold text-neutral-400 ring-1 ring-neutral-200">
+          <% if (tenant.logoUrl) { %><img src="<%= tenant.logoUrl %>" alt="Current logo" class="h-full w-full object-cover"><% } else { %><%= tenant.name.charAt(0).toUpperCase() %><% } %>
+        </span>
+        <div class="min-w-0 space-y-2">
+          <input id="logoInput" type="file" name="logo" accept="image/jpeg,image/png,image/webp"
+                 class="block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-neutral-700">
+          <% if (tenant.logoUrl) { %>
+            <label class="flex items-center gap-2 text-sm text-neutral-600"><input type="checkbox" name="removeLogo" value="1" class="h-4 w-4 rounded border-neutral-300">Remove current logo</label>
+          <% } %>
+        </div>
+      </div>
+    </section>
+
+    <!-- Photos -->
+    <section class="p-5 sm:p-6">
+      <h2 class="text-base font-bold text-neutral-900">Turf photos</h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Up to <%= maxPhotos %> photos for the banner slideshow. The first one is shown first.</p>
+
+      <% if (tenant.images.length) { %>
+        <ul class="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
+          <% tenant.images.forEach((url, i) => { %>
+            <li>
+              <label class="group block cursor-pointer">
+                <span class="relative block aspect-[4/3] overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-neutral-200">
+                  <img src="<%= url %>" alt="Photo <%= i + 1 %>" loading="lazy" class="h-full w-full object-cover">
+                </span>
+                <span class="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-600">
+                  <input type="checkbox" name="removePhotos" value="<%= url %>" class="h-3.5 w-3.5 rounded border-neutral-300">Remove
+                </span>
+              </label>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+
+      <input id="photosInput" type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp"
+             class="mt-4 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-neutral-700">
+      <ul id="photoPreview" class="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4"></ul>
+      <p id="fileError" class="mt-2 hidden text-sm text-red-700" role="alert"></p>
+    </section>
+
+    <!-- Description -->
+    <section class="p-5 sm:p-6">
+      <label for="description" class="text-base font-bold text-neutral-900">About your turf</label>
+      <p class="mt-0.5 text-sm text-neutral-500">A few lines for the "About the venue" section.</p>
+      <textarea id="description" name="description" rows="5" required minlength="20" maxlength="1000"
+                placeholder="Floodlit 7-a-side turf in the heart of the city, with parking, washrooms and a seating area."
+                class="<%= inputCls %> resize-y"><%= v.description || '' %></textarea>
+      <p class="mt-1 text-right text-xs text-neutral-500"><span id="descCount">0</span> / 1000</p>
+    </section>
+
+    <!-- Theme -->
+    <section class="p-5 sm:p-6">
+      <h2 class="text-base font-bold text-neutral-900">Colour theme</h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Buttons and highlights on your website use this colour.</p>
+
+      <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <% Object.entries(themes).forEach(([key, theme]) => { %>
+          <label class="cursor-pointer">
+            <input type="radio" name="theme" value="<%= key %>" class="peer sr-only" <%= v.theme === key ? 'checked' : '' %>>
+            <span class="flex items-center gap-3 rounded-xl p-3 ring-1 ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-50 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+              <span class="h-8 w-8 shrink-0 rounded-full" style="background: <%= theme.colors[600] %>"></span>
+              <span class="text-sm font-semibold text-neutral-800"><%= theme.label %></span>
+            </span>
+          </label>
+        <% }) %>
+      </div>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 p-5 sm:flex-row sm:justify-between sm:p-6">
+      <a href="<%= backPath %>" class="<%= ghostBtn %> text-center">Back</a>
+      <button type="submit" class="<%= primaryBtn %>">Save and continue</button>
+    </div>
+  </form>
+
+  <% } else if (name === 'plan') { %>
+  <!-- ================= Step 5: plan ================= -->
+  <form method="post" action="/onboarding/plan" class="space-y-6">
+
+    <div class="grid gap-4 md:grid-cols-3">
+      <% const fitting = plans.find((p) => !p.limits || !p.limits.grounds || p.limits.grounds >= tenant.groundsCount);
+         plans.forEach((plan) => {
+           const tooSmall = plan.limits && plan.limits.grounds && plan.limits.grounds < tenant.groundsCount; %>
+        <label class="<%= tooSmall ? 'cursor-not-allowed opacity-60' : 'cursor-pointer' %>">
+          <input type="radio" name="plan" value="<%= plan.key %>" class="peer sr-only"
+                 <%= v.plan === plan.key && !tooSmall ? 'checked' : '' %> <%= tooSmall ? 'disabled' : '' %>>
+          <span class="flex h-full flex-col rounded-2xl bg-white p-5 ring-1 ring-neutral-200 transition-shadow hover:shadow-md peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+            <span class="flex items-center justify-between gap-2">
+              <span class="text-lg font-bold text-neutral-900"><%= plan.name %></span>
+              <% if (fitting && fitting.key === plan.key) { %>
+                <span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20">Fits your setup</span>
+              <% } %>
+            </span>
+            <span class="mt-3 flex items-baseline gap-1">
+              <span class="text-3xl font-extrabold tracking-tight text-neutral-900"><%= inr(plan.price) %></span>
+              <span class="text-sm text-neutral-500">/ month</span>
+            </span>
+            <ul class="mt-4 space-y-2 border-t border-neutral-200 pt-4 text-sm text-neutral-700">
+              <% plan.features.forEach((feature) => { %>
+                <li class="flex items-start gap-2"><i data-lucide="check" class="mt-0.5 h-4 w-4 shrink-0 text-blue-600"></i><span><%= feature %></span></li>
+              <% }) %>
+            </ul>
+            <% if (tooSmall) { %>
+              <span class="mt-4 text-xs font-medium text-red-700">Includes <%= plan.limits.grounds %> ground<%= plan.limits.grounds === 1 ? '' : 's' %>. You set up <%= tenant.groundsCount %>.</span>
+            <% } %>
+          </span>
+        </label>
+      <% }) %>
+    </div>
+
+    <!-- How the trial and billing work -->
+    <section class="<%= card %> p-5 sm:p-6" aria-labelledby="billingTitle">
+      <h2 id="billingTitle" class="text-base font-bold text-neutral-900">How your free trial and billing work</h2>
+      <ol class="mt-4 space-y-4 text-sm">
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">1</span>
+          <span><strong class="font-semibold text-neutral-900">Today: nothing to pay.</strong> <span class="text-neutral-600">We do not ask for a card or any payment details during sign-up.</span></span></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">2</span>
+          <span><strong class="font-semibold text-neutral-900"><%= trialDays %>-day free trial from the day you publish.</strong> <span class="text-neutral-600">The trial starts when your website goes live in the last step, not now, so time spent setting up is free.</span></span></li>
+        <li class="flex gap-3"><span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">3</span>
+          <span><strong class="font-semibold text-neutral-900">After the trial: billed monthly.</strong> <span class="text-neutral-600">Your plan price is charged once a month. Online payment is still being set up, so nothing is charged automatically yet. Your trial end date is shown on your dashboard.</span></span></li>
+      </ol>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+      <a href="<%= backPath %>" class="<%= ghostBtn %> text-center">Back</a>
+      <button type="submit" class="<%= primaryBtn %>">Continue to preview</button>
+    </div>
+  </form>
+
+  <% } else if (name === 'publish') { %>
+  <!-- ================= Step 6: preview and publish ================= -->
+  <div class="space-y-6">
+
+    <!-- Summary -->
+    <section class="<%= card %> divide-y divide-neutral-200">
+      <% [
+        ['Business', '/onboarding/business', [tenant.name, tenant.sport + ' · ' + tenant.address, tenant.phone + ' · ' + tenant.email]],
+        ['Ground', '/onboarding/grounds', [
+          tenant.groundsCount + (tenant.groundsCount === 1 ? ' ground' : ' grounds') + ' · ' + inr(tenant.pricePerHour) + ' per hour',
+          tenant.openingTime + ' to ' + tenant.closingTime,
+          tenant.operatingDays.length === 7 ? 'Open every day' : 'Open ' + tenant.operatingDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')
+        ]],
+        ['Website', '/onboarding/website', [
+          (tenant.logoUrl ? 'Logo added' : 'No logo yet') + ' · ' + tenant.images.length + (tenant.images.length === 1 ? ' photo' : ' photos'),
+          'Theme: ' + themeLabel
+        ]],
+        ['Plan', '/onboarding/plan', [
+          (plan ? plan.name + ' · ' + inr(plan.price) + ' / month' : tenant.plan),
+          trialDays + '-day free trial starts when you publish'
+        ]]
+      ].forEach(([title, editPath, lines]) => { %>
+        <div class="flex items-start justify-between gap-4 p-4 sm:p-5">
+          <div class="min-w-0">
+            <h2 class="text-sm font-bold text-neutral-900"><%= title %></h2>
+            <% lines.forEach((line) => { %><p class="mt-0.5 break-words text-sm text-neutral-600"><%= line %></p><% }) %>
+          </div>
+          <a href="<%= editPath %>" class="shrink-0 text-sm font-semibold text-blue-700 hover:underline">Edit</a>
+        </div>
+      <% }) %>
+    </section>
+
+    <!-- Live preview -->
+    <section class="<%= card %> p-4 sm:p-5" aria-labelledby="previewTitle">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="previewTitle" class="text-base font-bold text-neutral-900">Preview of your website</h2>
+        <div class="inline-flex rounded-lg bg-neutral-100 p-1" role="group" aria-label="Preview size">
+          <button type="button" data-size="phone" aria-pressed="true" class="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900 shadow-sm">Phone</button>
+          <button type="button" data-size="desktop" aria-pressed="false" class="rounded-md px-3 py-1.5 text-sm font-semibold text-neutral-600">Computer</button>
+        </div>
+      </div>
+
+      <div class="mt-4 overflow-hidden rounded-xl bg-neutral-100 p-3 sm:p-4">
+        <iframe id="previewFrame" src="/onboarding/preview" title="Preview of <%= tenant.name %>"
+                class="mx-auto block h-[560px] w-full max-w-[390px] rounded-lg border-0 bg-white shadow-md transition-all sm:h-[640px]"></iframe>
+      </div>
+      <p class="mt-3 text-xs text-neutral-500">This is a preview. Booking buttons are shown with sample slots and do not save anything.</p>
+    </section>
+
+    <!-- Publish -->
+    <section class="<%= card %> p-5 sm:p-6">
+      <h2 class="text-base font-bold text-neutral-900">Ready to go live?</h2>
+      <p class="mt-1 text-sm text-neutral-600">
+        Your website will be live at
+        <strong class="break-all font-semibold text-neutral-900"><%= siteHost(tenant.slug) %></strong>.
+        Your <%= trialDays %>-day free trial starts today. You can edit everything later from your dashboard.
+      </p>
+
+      <form method="post" action="/onboarding/publish" class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+        <a href="<%= backPath %>" class="<%= ghostBtn %> text-center">Back</a>
+        <button id="publishBtn" type="submit" class="<%= primaryBtn %>">Publish my website</button>
+      </form>
+      <p class="mt-4 text-xs text-neutral-500">Not ready? Close this page. Your progress is saved, and logging in again brings you back here.</p>
+    </section>
+  </div>
+  <% } %>
+</div>
+
+<script>
+  (() => {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const MAX_BYTES = 4 * 1024 * 1024;
+
+    /* ---------- Step 1: resend countdown ---------- */
+    const resend = $('resendBtn');
+    if (resend) {
+      let wait = Number(resend.dataset.wait) || 0;
+      const label = resend.textContent;
+      const tick = () => {
+        resend.disabled = wait > 0;
+        resend.textContent = wait > 0 ? `send a new code (${wait}s)` : label;
+        if (wait-- > 0) setTimeout(tick, 1000);
+      };
+      tick();
+    }
+
+    /* ---------- Step 2: website address ---------- */
+    const slug = $('slug');
+    if (slug) {
+      const turfName = $('turfName');
+      const preview = $('slugPreview');
+      const status = $('slugStatus');
+      const idle = status.innerHTML;
+      let edited = slug.value.trim() !== '';
+      let timer = null;
+
+      const clean = (value) => value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').slice(0, 40);
+
+      async function check() {
+        const value = slug.value;
+        if (value.length < 3) { status.innerHTML = idle; return; }
+        try {
+          const response = await fetch(`/onboarding/slug-check?slug=${encodeURIComponent(value)}`);
+          const data = await response.json();
+          if (slug.value !== value) return; // typed more since
+          status.textContent = data.message;
+          status.className = `mt-1.5 block text-xs font-medium ${data.available ? 'text-green-700' : 'text-red-700'}`;
+        } catch (_) { /* the server checks again on save */ }
+      }
+
+      const changed = () => {
+        preview.textContent = slug.value || 'yourturf';
+        status.className = 'mt-1.5 block text-xs font-normal text-neutral-500';
+        clearTimeout(timer);
+        timer = setTimeout(check, 400);
+      };
+
+      slug.addEventListener('input', () => { edited = true; slug.value = clean(slug.value); changed(); });
+      turfName.addEventListener('input', () => {
+        if (edited) return;
+        slug.value = clean(turfName.value).replace(/^-|-$/g, '');
+        changed();
+      });
+    }
+
+    /* ---------- Step 3: slot count + day shortcuts ---------- */
+    const opening = $('openingTime'), closing = $('closingTime'), slotCount = $('slotCount');
+    if (opening && closing) {
+      const minutes = (value) => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
+      const update = () => {
+        if (!opening.value || !closing.value || minutes(closing.value) <= minutes(opening.value)) {
+          slotCount.textContent = 'Closing time must be later than opening time.';
+          return;
+        }
+        const slots = Math.floor((minutes(closing.value) - minutes(opening.value)) / 60);
+        slotCount.textContent = `Customers can book ${slots} one-hour slot${slots === 1 ? '' : 's'} per day.`;
+      };
+      opening.addEventListener('input', update);
+      closing.addEventListener('input', update);
+      update();
+
+      const boxes = [...document.querySelectorAll('input[name="operatingDays"]')];
+      const sets = {
+        all: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        weekdays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+        weekend: ['sat', 'sun']
+      };
+      document.querySelectorAll('[data-days]').forEach((button) =>
+        button.addEventListener('click', () => {
+          boxes.forEach((box) => { box.checked = sets[button.dataset.days].includes(box.value); });
+        })
+      );
+    }
+
+    /* ---------- Step 4: image previews, size check, text counter ---------- */
+    const fileError = $('fileError');
+    const logoInput = $('logoInput'), photosInput = $('photosInput');
+
+    function tooBig(files) {
+      const big = [...files].find((file) => file.size > MAX_BYTES);
+      fileError.textContent = big ? `"${big.name}" is larger than 4 MB. Choose a smaller image.` : '';
+      fileError.classList.toggle('hidden', !big);
+      return Boolean(big);
+    }
+
+    if (logoInput) {
+      logoInput.addEventListener('change', () => {
+        const file = logoInput.files[0];
+        if (!file || tooBig([file])) { logoInput.value = ''; return; }
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.alt = 'New logo';
+        img.className = 'h-full w-full object-cover';
+        $('logoBox').replaceChildren(img);
+      });
+    }
+
+    if (photosInput) {
+      photosInput.addEventListener('change', () => {
+        if (tooBig(photosInput.files)) { photosInput.value = ''; $('photoPreview').replaceChildren(); return; }
+        $('photoPreview').replaceChildren(...[...photosInput.files].map((file) => {
+          const li = document.createElement('li');
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(file);
+          img.alt = file.name;
+          img.className = 'aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-neutral-200';
+          li.append(img);
+          return li;
+        }));
+      });
+    }
+
+    const description = $('description');
+    if (description) {
+      const count = $('descCount');
+      const update = () => { count.textContent = description.value.length; };
+      description.addEventListener('input', update);
+      update();
+    }
+
+    /* ---------- Step 6: preview size + double-submit guard ---------- */
+    const frame = $('previewFrame');
+    if (frame) {
+      document.querySelectorAll('[data-size]').forEach((button) =>
+        button.addEventListener('click', () => {
+          const phone = button.dataset.size === 'phone';
+          frame.style.maxWidth = phone ? '390px' : '100%';
+          document.querySelectorAll('[data-size]').forEach((other) => {
+            const active = other === button;
+            other.setAttribute('aria-pressed', String(active));
+            other.className = `rounded-md px-3 py-1.5 text-sm font-semibold ${active ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600'}`;
+          });
+        })
+      );
+    }
+
+    document.querySelectorAll('form').forEach((form) =>
+      form.addEventListener('submit', () => {
+        const button = form.querySelector('button[type="submit"]:not(#resendBtn)');
+        if (!button || !form.checkValidity()) return;
+        setTimeout(() => { button.disabled = true; button.textContent = 'Saving…'; }, 0);
+      })
+    );
+  })();
+</script>
+
+<%- include('partials/foot') %>

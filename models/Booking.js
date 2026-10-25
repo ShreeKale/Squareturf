@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const bookingSchema = new mongoose.Schema({
   tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
 
+  /* Set when the booking was made by a logged-in customer */
+  customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
+
   customerName: { type: String, required: true, trim: true, maxlength: 100 },
   customerPhone: { type: String, required: true, trim: true, maxlength: 20 },
   customerEmail: { type: String, lowercase: true, trim: true },
@@ -13,7 +16,7 @@ const bookingSchema = new mongoose.Schema({
 
   amount: { type: Number, required: true, min: 0 },
   paymentStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
-    paidAt: { type: Date, default: null },
+  paidAt: { type: Date, default: null },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'cancelled', 'completed'],

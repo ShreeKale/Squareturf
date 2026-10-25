@@ -42,8 +42,18 @@ const app = express();
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/squareturf';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const MONGO_URI = process.env.MONGO_URI || (IS_PRODUCTION ? '' : 'mongodb://127.0.0.1:27017/squareturf');
+const SESSION_SECRET = process.env.SESSION_SECRET || (IS_PRODUCTION ? '' : 'squareturf-development-secret');
 const BASE_DOMAIN = process.env.BASE_DOMAIN || 'localhost';
+
+// Fail early rather than silently connecting to a local database in production.
+if (!MONGO_URI) {
+  throw new Error('MONGO_URI is required. Set it in your local .env or Vercel Environment Variables.');
+}
+if (!SESSION_SECRET) {
+  throw new Error('SESSION_SECRET is required in production. Set it in Vercel Environment Variables.');
+}
 
 const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed'];
 const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed'];
@@ -67,7 +77,7 @@ app.use(morgan('dev'));
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'squareturf-development-secret',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({ mongoUrl: MONGO_URI }),
@@ -82,7 +92,7 @@ app.use(
 
 /* Values every view can use */
 app.use((req, res, next) => {
-  res.locals.currentUser = null; // replaced by requireAuth on logged-in pages
+  res.locals.currentUser = null;
   res.locals.isLoggedIn = Boolean(req.session.userId);
   res.locals.baseDomain = BASE_DOMAIN;
   res.locals.port = PORT;
@@ -388,7 +398,7 @@ app.post(
       throw error;
     }
 
-    req.session.userId = user._id.toString();
+        req.session.userId = user._id.toString();
     res.redirect('/dashboard');
   })
 );

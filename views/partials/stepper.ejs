@@ -1,0 +1,40 @@
+<%
+  /* Progress bar for the sign-up flow. Needs: steps (list), step (current number). */
+  const current = steps.find((s) => s.number === step) || steps[0];
+  const percent = Math.round((step / steps.length) * 100);
+%>
+<nav aria-label="Sign-up progress" class="mb-6 sm:mb-8">
+
+  <!-- Phone: one line + bar -->
+  <div class="sm:hidden">
+    <div class="flex items-baseline justify-between text-sm">
+      <span class="font-semibold text-neutral-900">Step <%= step %> of <%= steps.length %></span>
+      <span class="text-neutral-500"><%= current.label %></span>
+    </div>
+    <div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-200" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= percent %>">
+      <div class="h-full rounded-full bg-blue-600 transition-all" style="width: <%= percent %>%"></div>
+    </div>
+  </div>
+
+  <!-- Tablet and computer: numbered steps -->
+  <ol class="hidden items-center sm:flex">
+    <% steps.forEach((s, i) => {
+         const done = s.number < step;
+         const active = s.number === step; %>
+      <li class="flex items-center <%= i < steps.length - 1 ? 'flex-1' : '' %>" <%- active ? 'aria-current="step"' : '' %>>
+        <span class="flex items-center gap-2.5">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold
+            <%= done ? 'bg-blue-600 text-white' : active ? 'bg-neutral-900 text-white' : 'bg-white text-neutral-500 ring-1 ring-neutral-300' %>">
+            <% if (done) { %>
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
+            <% } else { %><%= s.number %><% } %>
+          </span>
+          <span class="text-sm font-semibold <%= active ? 'text-neutral-900' : done ? 'text-neutral-700' : 'text-neutral-500' %>"><%= s.label %></span>
+        </span>
+        <% if (i < steps.length - 1) { %>
+          <span class="mx-3 h-px flex-1 <%= done ? 'bg-blue-600' : 'bg-neutral-300' %>" aria-hidden="true"></span>
+        <% } %>
+      </li>
+    <% }) %>
+  </ol>
+</nav>

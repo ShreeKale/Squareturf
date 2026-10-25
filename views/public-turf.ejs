@@ -1,23 +1,92 @@
 <%
   /* ---------- View data ---------- */
-  const name      = tenant.name || 'Turf';
-  const price     = Number(tenant.pricePerHour) || 0;
-  const hasTiming = tenant.openingTime && tenant.closingTime;
+  const name       = tenant.name || 'Turf';
+  const price      = Number(tenant.pricePerHour) || 0;
+  const hasTiming  = tenant.openingTime && tenant.closingTime;
+  const hasContact = !!(tenant.phone || tenant.email);
 
-  /* Banner photos: the venue's own photos first, otherwise generic turf photos from /public/images/turf/ */
-  const venuePhotos   = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
-  const defaultPhotos = [1, 2, 3, 4, 5, 6].map((n) => `/images/turf/turf-${n}.jpg`);
-  const photos        = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 6);
+  /* The logged-in customer of this turf website, or null */
+  const currentCustomer = locals.customer || null;
+  const customerJson    = JSON.stringify(currentCustomer).replace(/</g, '\\u003c');
+  const firstName = (value) => String(value || '').trim().split(/\s+/)[0];
+  const initialOf = (value) => String(value || '?').trim().charAt(0).toUpperCase();
 
+  /* Small icons for the user card (24x24, stroke style) */
+  const icons = {
+    chevron:  '<path d="m6 9 6 6 6-6"/>',
+    calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    plus:     '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+    grid:     '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    phone:    '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+    logout:   '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+    pin:      '<path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    close:    '<path d="M18 6 6 18M6 6l12 12"/>'
+  };
+  const icon = (key, cls = 'h-5 w-5') =>
+    `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[key]}</svg>`;
+
+  /* Hero slideshow: use the local banner photos in public/img by default.
+     Tenant-uploaded photos still take priority when tenant.images is configured. */
+  const venuePhotos = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
+  const defaultPhotos = [
+    '/img/Turf1.jfif',
+    '/img/Turf2.jfif',
+    '/img/Turf3.jfif',
+    '/img/Turf4.jfif',
+    '/img/Turf5.jfif'
+  ];
+  const photos = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 5);
+
+  /* Facilities */
   const defaultServices = [
-    { icon: '🚗', name: 'Parking',        description: 'Convenient parking available.' },
-    { icon: '💡', name: 'Floodlights',    description: 'Evening and night play supported.' },
-    { icon: '🚻', name: 'Washroom',       description: 'Clean washroom facility.' },
-    { icon: '💧', name: 'Drinking water', description: 'Drinking water available.' }
+    { name: 'Parking',          description: 'Convenient parking available.' },
+    { name: 'Floodlights',      description: 'Evening and night play supported.' },
+    { name: 'Washroom',         description: 'Clean washroom facility.' },
+    { name: 'Drinking water',   description: 'Drinking water available.' },
+    { name: 'Changing room',    description: 'Change and keep your bags safe.' },
+    { name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
+    { name: 'First aid',        description: 'Basic first aid kit on site.' },
+    { name: 'Seating area',     description: 'Sit and watch the game.' }
   ];
   const services = Array.isArray(tenant.services) && tenant.services.length
     ? tenant.services
     : defaultServices;
+
+  /* Facility photo: service.image if the venue set one, otherwise matched by name */
+  /* Stable, relevant Unsplash images for each facility type. Venue-provided service.image takes priority. */
+  const facilityPhotos = [
+    [/park/i,                       'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?auto=format&fit=crop&w=640&q=80'],
+    [/flood|light/i,                'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=640&q=80'],
+    [/wash|toilet|rest ?room|bath/i,'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=640&q=80'],
+    [/water|drink/i,                'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&w=640&q=80'],
+    [/chang|locker|room/i,          'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=640&q=80'],
+    [/equip|rent|ball|gear/i,       'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=640&q=80'],
+    [/first|aid|medic/i,            'https://images.unsplash.com/photo-1603398938378-e54eab446dde?auto=format&fit=crop&w=640&q=80'],
+    [/seat|bench|stand|lounge/i,    'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=640&q=80'],
+    [/cafe|food|snack|canteen/i,    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=640&q=80'],
+    [/wifi|wi-fi/i,                 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=640&q=80']
+  ];
+  const imageFor = (service) => {
+    if (service.image) return service.image;
+    const hit = facilityPhotos.find(([pattern]) => pattern.test(service.name || ''));
+    return hit ? hit[1] : 'https://loremflickr.com/640/480/football,turf?lock=31';
+  };
+
+  /* Social + location links (shown only when the venue has the data) */
+  const waDigits = String(tenant.whatsapp || tenant.phone || '').replace(/\D/g, '');
+  const waNumber = waDigits.length === 10 ? '91' + waDigits : waDigits;
+  const waUrl    = waNumber
+    ? `https://wa.me/${waNumber}?text=${encodeURIComponent('Hi, I would like to book a slot at ' + name)}`
+    : '';
+  const igRaw    = String(tenant.instagram || '').trim();
+  const igUrl    = igRaw
+    ? (/^https?:\/\//i.test(igRaw) ? igRaw : `https://www.instagram.com/${igRaw.replace(/^@/, '')}`)
+    : '';
+  const mapUrl   = tenant.mapUrl ||
+    (tenant.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + tenant.address)}` : '');
+  const mapEmbed = tenant.address
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(name + ' ' + tenant.address)}&z=15&output=embed`
+    : '';
 
   const now = new Date();
   const today = [
@@ -47,9 +116,10 @@
   <style type="text/tailwindcss">
     @layer components {
       /* Time slot button and its three states */
-      .slot            { @apply min-h-[76px] rounded-xl border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
-      .slot-status     { @apply text-[11px] font-semibold uppercase tracking-wide; }
-      .slot-time       { @apply mt-1 text-sm font-bold; }
+      .slot            { @apply min-h-[72px] rounded-xl border p-2.5 text-left transition-colors sm:min-h-[76px] sm:p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
+      .slot-status     { @apply text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]; }
+      .slot-time       { @apply mt-1 text-[13px] font-bold leading-tight sm:text-sm; }
+      .slot-end        { @apply mt-0.5 text-[11px] font-medium leading-tight opacity-75 sm:text-xs; }
 
       .slot--available { @apply border-neutral-300 bg-white hover:border-blue-600 hover:bg-blue-50; }
       .slot--available .slot-status { @apply text-blue-700; }
@@ -60,13 +130,24 @@
       .slot--booked    { @apply cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400; }
       .slot--booked .slot-status    { @apply text-neutral-400; }
 
-      /* Form fields */
-      .field { @apply w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100; }
+      /* Form fields and buttons */
+      .field    { @apply w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100; }
+      .btn-dark { @apply w-full rounded-lg bg-neutral-900 px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500; }
+
+      /* Log in / Register switch */
+      .tab         { @apply flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600; }
+      .tab--active { @apply bg-white text-neutral-900 shadow-sm; }
+
+      /* Rows inside the user card */
+      .menu-item { @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600; }
 
       /* Banner carousel */
       .dot         { @apply h-2 w-2 rounded-full bg-white/50 transition-all hover:bg-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white; }
       .dot--active { @apply w-6 bg-white; }
       .arrow       { @apply hidden h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur transition-colors hover:bg-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:flex; }
+
+      /* Round social / location icon buttons in the footer */
+      .social { @apply flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
     }
   </style>
 
@@ -81,32 +162,123 @@
         radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.25) 100%),
         repeating-linear-gradient(90deg, #2e8b4a 0 80px, #3aa25b 80px 160px);
     }
+
+    /* Bottom bar with the Next button (plain CSS so it always works) */
+    .selection-bar {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+      background: #fff; border-top: 1px solid #e5e5e5;
+      padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+      box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+    }
+    .selection-bar[hidden] { display: none; }
   </style>
 </head>
 
 <body class="bg-neutral-100 font-sans text-neutral-900 antialiased selection:bg-blue-600 selection:text-white">
 
-  <!-- Navbar -->
+  <!-- Navbar: on a phone it shows the logo, your name (or Log in) and Book now -->
   <header class="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
-    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 lg:px-8" aria-label="Main">
-      <a href="#top" class="flex items-center gap-3">
+    <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-5 lg:px-8" aria-label="Main">
+
+      <a href="#top" class="flex min-w-0 items-center gap-3">
         <% if (tenant.logoUrl) { %>
-          <img src="<%= tenant.logoUrl %>" alt="" class="h-10 w-10 rounded-lg object-cover">
+          <img src="<%= tenant.logoUrl %>" alt="" class="h-10 w-10 shrink-0 rounded-lg object-cover">
         <% } else { %>
-          <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
             <%= name.charAt(0).toUpperCase() %>
           </span>
         <% } %>
-        <span class="leading-tight">
-          <span class="block font-bold"><%= name %></span>
-          <span class="block text-xs text-neutral-500">Powered by SquareTurf</span>
+        <span class="hidden min-w-0 leading-tight min-[420px]:block">
+          <span class="block max-w-[9rem] truncate font-bold sm:max-w-xs"><%= name %></span>
+          <span class="hidden text-xs text-neutral-500 sm:block">Powered by SquareTurf</span>
         </span>
       </a>
 
-      <div class="hidden items-center gap-1 text-sm font-medium md:flex">
-        <a href="#booking" class="rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Book</a>
-        <a href="#facilities" class="rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900">Facilities</a>
-        <a href="#booking" class="ml-2 rounded-lg bg-neutral-900 px-4 py-2 font-semibold text-white hover:bg-neutral-700">Book now</a>
+      <div class="flex shrink-0 items-center gap-1 text-sm font-medium sm:gap-1.5">
+        <a href="#facilities" class="hidden rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:block">Facilities</a>
+        <% if (mapUrl) { %>
+          <a href="#location" class="hidden rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:block">Location</a>
+        <% } %>
+        <% if (hasContact) { %>
+          <a href="#contact" class="hidden rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:block">Contact</a>
+        <% } %>
+
+        <!-- Shown when nobody is logged in -->
+        <button id="loginBtn" type="button" data-auth-open="login"
+          class="rounded-lg px-3 py-2 font-semibold text-neutral-800 hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 <%= currentCustomer ? 'hidden' : '' %>">
+          Log in
+        </button>
+
+        <!-- Shown after login: the customer's name opens the user card -->
+        <div id="userMenu" class="relative <%= currentCustomer ? '' : 'hidden' %>">
+          <button id="userBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userCard"
+            class="flex items-center gap-1.5 rounded-full bg-neutral-100 py-1 pl-1 pr-2 font-semibold text-neutral-800 transition-colors hover:bg-neutral-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 sm:gap-2 sm:pr-3">
+            <span id="userInitial" class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"><%= currentCustomer ? initialOf(currentCustomer.name) : '' %></span>
+            <span id="userFirstName" class="max-w-[4.5rem] truncate sm:hidden"><%= currentCustomer ? firstName(currentCustomer.name) : '' %></span>
+            <span id="userFullName" class="hidden max-w-[10rem] truncate sm:inline"><%= currentCustomer ? currentCustomer.name : '' %></span>
+            <%- icon('chevron', 'h-4 w-4 shrink-0 text-neutral-500') %>
+          </button>
+
+          <!-- User card -->
+          <div id="userCard" role="menu" aria-label="Your account"
+            class="fixed inset-x-3 top-[4.25rem] z-50 hidden rounded-2xl bg-white p-2 shadow-xl ring-1 ring-neutral-200 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
+
+            <div class="flex items-center gap-3 p-3">
+              <span id="cardInitial" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-bold text-white"></span>
+              <div class="min-w-0">
+                <p id="cardName" class="truncate font-bold text-neutral-900"></p>
+                <p id="cardPhone" class="truncate text-sm text-neutral-600"></p>
+                <p id="cardEmail" class="truncate text-xs text-neutral-500"></p>
+              </div>
+            </div>
+
+            <div class="my-1 border-t border-neutral-200"></div>
+
+            <ul class="py-1">
+              <li>
+                <button type="button" id="historyOpen" role="menuitem" class="menu-item">
+                  <span class="text-neutral-500"><%- icon('calendar') %></span>
+                  <span class="flex-1">My bookings<span class="block text-xs font-normal text-neutral-500">Booking history</span></span>
+                </button>
+              </li>
+              <li>
+                <a href="#booking" role="menuitem" data-menu-link class="menu-item">
+                  <span class="text-neutral-500"><%- icon('plus') %></span>Book a slot
+                </a>
+              </li>
+              <li>
+                <a href="#facilities" role="menuitem" data-menu-link class="menu-item">
+                  <span class="text-neutral-500"><%- icon('grid') %></span>Facilities
+                </a>
+              </li>
+              <% if (mapUrl) { %>
+                <li>
+                  <a href="#location" role="menuitem" data-menu-link class="menu-item">
+                    <span class="text-neutral-500"><%- icon('pin') %></span>Location
+                  </a>
+                </li>
+              <% } %>
+              <% if (hasContact) { %>
+                <li>
+                  <a href="#contact" role="menuitem" data-menu-link class="menu-item">
+                    <span class="text-neutral-500"><%- icon('phone') %></span>Contact
+                  </a>
+                </li>
+              <% } %>
+            </ul>
+
+            <div class="border-t border-neutral-200 pt-1">
+              <button type="button" id="logoutBtn" role="menuitem" class="menu-item text-red-700 hover:bg-red-50 hover:text-red-800">
+                <span><%- icon('logout') %></span>Log out
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <a href="#booking"
+          class="rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:px-4">
+          Book now
+        </a>
       </div>
     </nav>
   </header>
@@ -159,7 +331,10 @@
           <p class="text-sm font-medium text-blue-200"><%= tenant.sport || 'Sports turf' %></p>
           <h1 class="mt-2 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl"><%= name %></h1>
           <% if (tenant.address) { %>
-            <p class="mt-2 max-w-xl text-sm text-neutral-200"><%= tenant.address %></p>
+            <p class="mt-2 flex max-w-xl items-start gap-1.5 text-sm text-neutral-200">
+              <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              <span><%= tenant.address %></span>
+            </p>
           <% } %>
 
           <div class="mt-5 flex flex-wrap items-center gap-3">
@@ -181,77 +356,76 @@
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Select your slots</h2>
       <p class="mt-2 text-neutral-600">Each slot is one hour. You can select more than one.</p>
 
-      <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-
-        <!-- Slot picker -->
-        <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-7">
-          <label for="bookingDate" class="text-sm font-semibold">Date</label>
-          <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="field mt-2 sm:max-w-xs">
-
-          <ul class="mt-6 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
-            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
-            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-neutral-300"></span>Booked</li>
-            <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-blue-600"></span>Selected</li>
-          </ul>
-
-          <div id="slotLoading" class="mt-7 hidden items-center gap-3 text-sm text-neutral-500" role="status">
-            <span class="loader"></span>Checking availability…
-          </div>
-          <div id="slotError" class="mt-7 hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
-
-          <div id="slotGrid" class="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
-
-          <div id="slotEmpty" class="mt-7 hidden rounded-xl border border-dashed border-neutral-300 p-8 text-center">
-            <p class="font-semibold">No slots available</p>
-            <p class="mt-1 text-sm text-neutral-500">There are no bookable slots on this date. Try another day.</p>
-          </div>
+      <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200 sm:p-7">
+        <div class="flex items-center justify-between gap-3">
+          <label class="text-sm font-semibold" id="dateStripLabel">Choose a date</label>
+          <span class="text-xs text-neutral-500">Next 20 days</span>
         </div>
+        <!-- Date chips, similar to cinema booking apps. The hidden date input keeps the existing booking logic intact. -->
+        <div id="dateStrip" class="mt-3 flex gap-2 overflow-x-auto pb-2" role="group" aria-labelledby="dateStripLabel"></div>
+        <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="hidden" tabindex="-1" aria-hidden="true">
 
-        <!-- Summary -->
-        <aside class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-neutral-200 lg:sticky lg:top-24">
-          <h3 class="text-xl font-bold">Your booking</h3>
+        <ul class="mt-6 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
+          <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
+          <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-neutral-300"></span>Booked</li>
+          <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-blue-600"></span>Selected</li>
+        </ul>
 
-          <dl class="mt-5 space-y-4 text-sm">
-            <div><dt class="text-neutral-500">Turf</dt><dd class="mt-0.5 font-medium"><%= name %></dd></div>
-            <div><dt class="text-neutral-500">Date</dt><dd id="summaryDate" class="mt-0.5 font-medium">Select a date</dd></div>
-            <div><dt class="text-neutral-500">Slots</dt><dd id="summaryTime" class="mt-0.5 font-medium">No slots selected</dd></div>
-            <div><dt class="text-neutral-500">Duration</dt><dd id="summaryDuration" class="mt-0.5 font-medium">0 hours</dd></div>
-          </dl>
+        <div id="slotLoading" class="mt-7 hidden items-center gap-3 text-sm text-neutral-500" role="status">
+          <span class="loader"></span>Checking availability…
+        </div>
+        <div id="slotError" class="mt-7 hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
 
-          <div class="my-5 flex items-baseline justify-between border-t border-neutral-200 pt-5">
-            <span class="text-sm text-neutral-500">Total</span>
-            <span class="text-3xl font-extrabold tracking-tight">₹<span id="summaryPrice">0</span></span>
-          </div>
+        <div id="slotGrid" class="mt-7 grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-4 lg:grid-cols-6"></div>
 
-          <form id="bookingForm" class="space-y-3" novalidate>
-            <input id="customerName"  type="text"  required maxlength="100" autocomplete="name" placeholder="Your name" class="field">
-            <input id="customerPhone" type="tel"   required maxlength="20"  autocomplete="tel"  placeholder="Phone number" class="field">
-            <input id="customerEmail" type="email" autocomplete="email" placeholder="Email (optional)" class="field">
-
-            <div id="bookingMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
-
-            <button id="bookingSubmit" type="submit" disabled
-              class="w-full rounded-lg bg-neutral-900 px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500">
-              Select slots first
-            </button>
-          </form>
-
-          <p class="mt-4 text-center text-xs leading-5 text-neutral-500">The turf owner will confirm your request.</p>
-        </aside>
+        <div id="slotEmpty" class="mt-7 hidden rounded-xl border border-dashed border-neutral-300 p-8 text-center">
+          <p class="font-semibold">No slots available</p>
+          <p class="mt-1 text-sm text-neutral-500">There are no bookable slots on this date. Try another day.</p>
+        </div>
       </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
+      <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">How booking works</h2>
+      <ol class="mt-6 grid gap-3 sm:grid-cols-3 sm:gap-4">
+        <% [
+          ['1', 'Pick your slots', 'Choose a date and one or more hourly slots.'],
+          ['2', 'Send your request', 'Tap Next. Log in once and your details are filled in for you.'],
+          ['3', 'Get confirmed', 'The turf owner confirms your booking.']
+        ].forEach(([n, title, text]) => { %>
+          <li class="flex items-start gap-4 rounded-2xl bg-white p-5 ring-1 ring-neutral-200">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white"><%= n %></span>
+            <span>
+              <span class="block font-semibold"><%= title %></span>
+              <span class="mt-1 block text-sm text-neutral-600"><%= text %></span>
+            </span>
+          </li>
+        <% }) %>
+      </ol>
     </section>
 
     <!-- Facilities -->
     <section id="facilities" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Facilities</h2>
-      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <% services.forEach(service => { %>
-          <article class="rounded-2xl bg-white p-5 ring-1 ring-neutral-200">
-            <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-100 text-xl" aria-hidden="true"><%= service.icon || '✓' %></span>
-            <h3 class="mt-4 font-semibold"><%= service.name %></h3>
-            <% if (service.description) { %>
-              <p class="mt-1.5 text-sm leading-relaxed text-neutral-600"><%= service.description %></p>
-            <% } %>
+          <article class="group relative isolate h-36 overflow-hidden rounded-2xl bg-neutral-800 sm:h-40">
+            <img src="<%= imageFor(service) %>" alt="" loading="lazy" decoding="async"
+                 onerror="this.remove()"
+                 class="absolute inset-0 -z-20 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none">
+            <!-- Stronger dark overlay on the text side for improved readability -->
+            <div class="absolute inset-0 -z-10 bg-gradient-to-r from-black/98 via-black/85 to-black/15"></div>
+            <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/35 via-transparent to-transparent"></div>
+
+            <div class="flex h-full items-end p-3.5 text-white sm:p-4">
+              <div class="max-w-[92%]">
+                <h3 class="text-sm font-extrabold leading-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] sm:text-base"><%= service.name %></h3>
+                <% if (service.description) { %>
+                  <p class="mt-1 text-xs font-medium leading-snug text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] sm:text-sm"><%= service.description %></p>
+                <% } %>
+              </div>
+            </div>
           </article>
         <% }) %>
       </div>
@@ -267,17 +441,46 @@
       </div>
     </section>
 
+    <!-- Location -->
+    <% if (mapUrl) { %>
+      <section id="location" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
+        <div class="overflow-hidden rounded-2xl bg-white ring-1 ring-neutral-200">
+          <% if (mapEmbed) { %>
+            <iframe src="<%= mapEmbed %>" title="Map of <%= name %>" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    class="h-56 w-full border-0 sm:h-72"></iframe>
+          <% } %>
+          <div class="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+            <div class="flex items-start gap-3">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              </span>
+              <div>
+                <h2 class="text-lg font-bold">Find us</h2>
+                <% if (tenant.address) { %><p class="mt-0.5 text-sm text-neutral-600"><%= tenant.address %></p><% } %>
+              </div>
+            </div>
+            <a href="<%= mapUrl %>" target="_blank" rel="noopener"
+               class="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700">Get directions</a>
+          </div>
+        </div>
+      </section>
+    <% } %>
+
     <!-- Contact -->
-    <% if (tenant.phone || tenant.email) { %>
-      <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
+    <% if (hasContact) { %>
+      <section id="contact" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
         <div class="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-white p-7 ring-1 ring-neutral-200">
           <div>
             <h2 class="text-2xl font-bold tracking-tight">Need help with your booking?</h2>
             <p class="mt-1 text-sm text-neutral-600">Get in touch with the turf directly.</p>
           </div>
-          <div class="flex gap-3">
+          <div class="flex flex-wrap gap-3">
             <% if (tenant.phone) { %>
               <a href="tel:<%= tenant.phone %>" class="rounded-lg bg-neutral-900 px-5 py-3 text-sm font-semibold text-white hover:bg-neutral-700">Call</a>
+            <% } %>
+            <% if (waUrl) { %>
+              <a href="<%= waUrl %>" target="_blank" rel="noopener" class="rounded-lg bg-green-600 px-5 py-3 text-sm font-semibold text-white hover:bg-green-700">WhatsApp</a>
             <% } %>
             <% if (tenant.email) { %>
               <a href="mailto:<%= tenant.email %>" class="rounded-lg bg-white px-5 py-3 text-sm font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50">Email</a>
@@ -287,26 +490,219 @@
       </section>
     <% } %>
 
-    <div class="h-16"></div>
+    <div class="h-28"></div>
   </main>
 
+  <!-- Footer with social + location icons -->
   <footer class="border-t border-neutral-200 bg-white">
-    <p class="mx-auto max-w-6xl px-5 py-6 text-center text-xs text-neutral-500 lg:px-8">
-      &copy; <%= new Date().getFullYear() %> <%= name %> &middot; Powered by SquareTurf
-    </p>
+    <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-8 lg:px-8">
+      <% if (igUrl || waUrl || mapUrl) { %>
+        <div class="flex items-center gap-3">
+          <% if (igUrl) { %>
+            <a href="<%= igUrl %>" target="_blank" rel="noopener" aria-label="Instagram" class="social hover:bg-pink-600">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
+            </a>
+          <% } %>
+          <% if (waUrl) { %>
+            <a href="<%= waUrl %>" target="_blank" rel="noopener" aria-label="WhatsApp" class="social hover:bg-green-600">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            </a>
+          <% } %>
+          <% if (mapUrl) { %>
+            <a href="<%= mapUrl %>" target="_blank" rel="noopener" aria-label="Location on map" class="social hover:bg-blue-600">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            </a>
+          <% } %>
+        </div>
+      <% } %>
+      <p class="text-center text-xs text-neutral-500">
+        &copy; <%= new Date().getFullYear() %> <%= name %> &middot; Powered by SquareTurf
+      </p>
+    </div>
   </footer>
+
+  <!-- Floating WhatsApp chat button -->
+  <% if (waUrl) { %>
+    <a href="<%= waUrl %>" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"
+       class="fixed bottom-24 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg hover:bg-green-600">
+      <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    </a>
+  <% } %>
+
+  <!-- Selection bar: appears once slots are selected -->
+  <div id="selectionBar" class="selection-bar" hidden>
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 lg:px-8">
+      <div class="leading-tight">
+        <p id="barCount" class="text-sm text-neutral-500"></p>
+        <p class="text-xl font-extrabold tracking-tight">₹<span id="barPrice">0</span></p>
+      </div>
+      <button id="nextBtn" type="button"
+        style="background:#2563eb;color:#fff;"
+        class="rounded-lg px-8 py-3 text-sm font-semibold">
+        Next
+      </button>
+    </div>
+  </div>
+
+  <!-- Booking popup -->
+  <div id="bookingModal" data-modal class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="bookingTitle">
+    <div data-close class="absolute inset-0 bg-neutral-950/60"></div>
+
+    <div id="modalPanel" tabindex="-1"
+         class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
+
+      <!-- Form view -->
+      <div id="formView">
+        <div class="flex items-center justify-between">
+          <h3 id="bookingTitle" class="text-xl font-bold">Your booking</h3>
+          <button type="button" data-close aria-label="Close"
+            class="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
+            <%- icon('close') %>
+          </button>
+        </div>
+
+        <dl class="mt-5 space-y-3 text-sm">
+          <div class="flex justify-between gap-4"><dt class="text-neutral-500">Turf</dt><dd class="text-right font-medium"><%= name %></dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-neutral-500">Date</dt><dd id="summaryDate" class="text-right font-medium">Select a date</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-neutral-500">Slots</dt><dd id="summaryTime" class="text-right font-medium">No slots selected</dd></div>
+          <div class="flex justify-between gap-4"><dt class="text-neutral-500">Duration</dt><dd id="summaryDuration" class="text-right font-medium">0 hours</dd></div>
+        </dl>
+
+        <div class="my-5 flex items-baseline justify-between border-t border-neutral-200 pt-5">
+          <span class="text-sm text-neutral-500">Total</span>
+          <span class="text-3xl font-extrabold tracking-tight">₹<span id="summaryPrice">0</span></span>
+        </div>
+
+        <form id="bookingForm" class="space-y-3" novalidate>
+
+          <!-- Logged in: details are already saved, so nothing to type -->
+          <div id="memberBox" class="hidden items-center gap-3 rounded-xl bg-neutral-50 p-3 ring-1 ring-inset ring-neutral-200">
+            <span id="memberInitial" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 font-bold text-white"></span>
+            <div class="min-w-0">
+              <p class="text-xs text-neutral-500">Booking as</p>
+              <p id="memberName" class="truncate font-semibold"></p>
+              <p id="memberContact" class="truncate text-sm text-neutral-600"></p>
+            </div>
+          </div>
+
+          <!-- Not logged in: ask for details -->
+          <div id="guestFields" class="space-y-3">
+            <p class="text-sm text-neutral-600">
+              Have an account?
+              <button type="button" data-auth-open="login" class="font-semibold text-blue-700 underline underline-offset-2">Log in</button>
+              to skip typing your details.
+            </p>
+            <input id="customerName"  type="text"  required maxlength="100" autocomplete="name" placeholder="Your name" class="field">
+            <input id="customerPhone" type="tel"   required maxlength="20"  autocomplete="tel"  placeholder="Phone number" class="field">
+            <input id="customerEmail" type="email" autocomplete="email" placeholder="Email (optional)" class="field">
+          </div>
+
+          <div id="bookingMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
+
+          <button id="bookingSubmit" type="submit" class="btn-dark">Request booking</button>
+        </form>
+
+        <p class="mt-4 text-center text-xs leading-5 text-neutral-500">The turf owner will confirm your request.</p>
+      </div>
+
+      <!-- Success view -->
+      <div id="successView" class="hidden py-4 text-center">
+        <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-700">
+          <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
+        </span>
+        <h3 class="mt-4 text-xl font-bold">Request sent</h3>
+        <p id="successText" class="mt-2 text-sm text-neutral-600"></p>
+        <button type="button" data-close class="btn-dark mt-6">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log in / Register popup -->
+  <div id="authModal" data-modal class="fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div data-auth-close class="absolute inset-0 bg-neutral-950/60"></div>
+
+    <div id="authPanel" tabindex="-1"
+         class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6"
+         style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
+
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h3 id="authTitle" class="text-xl font-bold">Welcome back</h3>
+          <p id="authSubtitle" class="mt-1 text-sm text-neutral-600">Enter your phone number to log in.</p>
+        </div>
+        <button type="button" data-auth-close aria-label="Close"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
+          <%- icon('close') %>
+        </button>
+      </div>
+
+      <div class="mt-5 flex rounded-xl bg-neutral-100 p-1" role="tablist" aria-label="Log in or register">
+        <button type="button" role="tab" data-auth-tab="login"    aria-selected="true"  class="tab tab--active">Log in</button>
+        <button type="button" role="tab" data-auth-tab="register" aria-selected="false" class="tab">New here? Register</button>
+      </div>
+
+      <!-- Returning customers: phone number only -->
+      <form id="loginForm" class="mt-5 space-y-3" novalidate>
+        <input id="loginPhone" type="tel" inputmode="numeric" maxlength="20" autocomplete="tel" aria-label="Phone number" placeholder="Phone number" class="field">
+        <div id="loginMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
+        <button id="loginSubmit" type="submit" class="btn-dark">Log in</button>
+      </form>
+
+      <!-- New customers: name, phone and email -->
+      <form id="registerForm" class="mt-5 hidden space-y-3" novalidate>
+        <input id="registerName"  type="text"  maxlength="100" autocomplete="name"  aria-label="Your name"    placeholder="Your name" class="field">
+        <input id="registerPhone" type="tel"   inputmode="numeric" maxlength="20" autocomplete="tel" aria-label="Phone number" placeholder="Phone number" class="field">
+        <input id="registerEmail" type="email" maxlength="120" autocomplete="email" aria-label="Email address" placeholder="Email address" class="field">
+        <div id="registerMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
+        <button id="registerSubmit" type="submit" class="btn-dark">Create account</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Booking history popup -->
+  <div id="historyModal" data-modal class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+    <div data-history-close class="absolute inset-0 bg-neutral-950/60"></div>
+
+    <div id="historyPanel" tabindex="-1"
+         class="absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col rounded-t-3xl bg-white shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
+
+      <div class="flex items-start justify-between gap-4 border-b border-neutral-200 p-5 sm:px-6">
+        <div>
+          <h3 id="historyTitle" class="text-xl font-bold">My bookings</h3>
+          <p id="historySummary" class="mt-0.5 text-sm text-neutral-500"></p>
+        </div>
+        <button type="button" data-history-close aria-label="Close"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900">
+          <%- icon('close') %>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto p-4 sm:p-5" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));">
+        <div id="historyLoading" class="hidden items-center gap-3 py-8 text-sm text-neutral-500" role="status">
+          <span class="loader"></span>Loading your bookings…
+        </div>
+        <div id="historyError" class="hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
+        <div id="historyEmpty" class="hidden rounded-xl border border-dashed border-neutral-300 p-8 text-center">
+          <p class="font-semibold">No bookings yet</p>
+          <p class="mt-1 text-sm text-neutral-500">Bookings you make while logged in will show up here.</p>
+          <a href="#booking" data-history-close class="mt-4 inline-flex rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Book a slot</a>
+        </div>
+        <ul id="historyList" class="space-y-3"></ul>
+      </div>
+    </div>
+  </div>
 
   <script>
     /* ================= Banner slideshow ================= */
     (() => {
       'use strict';
 
-      const SLIDE_INTERVAL = 3000; // 3 seconds
+      const SLIDE_INTERVAL = 2000; // 2 seconds
 
       const root     = document.getElementById('heroCarousel');
       const dotsBox  = root.querySelector('[data-dots]');
       const controls = [...root.querySelectorAll('[data-prev], [data-next]')];
-      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
       let slides  = [...root.querySelectorAll('[data-slide]')];
       let current = 0;
@@ -347,7 +743,7 @@
 
       function start() {
         stop();
-        if (slides.length < 2 || reduceMotion.matches || document.hidden) return;
+        if (slides.length < 2 || document.hidden) return;
         timer = setInterval(() => show(current + 1), SLIDE_INTERVAL);
       }
 
@@ -379,7 +775,372 @@
       show(0);
       start();
     })();
+  </script>
 
+  <script>
+    /* ================= Customer account: log in, register, user card, history ================= */
+    (() => {
+      'use strict';
+
+      const SLUG = <%- JSON.stringify(tenant.slug) %>;
+      const API  = `/api/public/${encodeURIComponent(SLUG)}/customer`;
+
+      const $ = (id) => document.getElementById(id);
+      const el = {
+        loginBtn: $('loginBtn'),
+        userMenu: $('userMenu'),
+        userBtn: $('userBtn'),
+        userCard: $('userCard'),
+        userInitial: $('userInitial'),
+        userFirstName: $('userFirstName'),
+        userFullName: $('userFullName'),
+        cardInitial: $('cardInitial'),
+        cardName: $('cardName'),
+        cardPhone: $('cardPhone'),
+        cardEmail: $('cardEmail'),
+        historyOpen: $('historyOpen'),
+        logoutBtn: $('logoutBtn'),
+
+        authModal: $('authModal'),
+        authPanel: $('authPanel'),
+        authTitle: $('authTitle'),
+        authSubtitle: $('authSubtitle'),
+        loginForm: $('loginForm'),
+        loginPhone: $('loginPhone'),
+        loginMessage: $('loginMessage'),
+        loginSubmit: $('loginSubmit'),
+        registerForm: $('registerForm'),
+        registerName: $('registerName'),
+        registerPhone: $('registerPhone'),
+        registerEmail: $('registerEmail'),
+        registerMessage: $('registerMessage'),
+        registerSubmit: $('registerSubmit'),
+
+        historyModal: $('historyModal'),
+        historyPanel: $('historyPanel'),
+        historySummary: $('historySummary'),
+        historyLoading: $('historyLoading'),
+        historyError: $('historyError'),
+        historyEmpty: $('historyEmpty'),
+        historyList: $('historyList')
+      };
+
+      /* The logged-in customer (from the server), or null */
+      let customer = <%- customerJson %>;
+      const listeners = new Set();
+
+      /* ---------- Helpers ---------- */
+      const firstName = (value) => String(value || '').trim().split(/\s+/)[0];
+      const initialOf = (value) => String(value || '?').trim().charAt(0).toUpperCase();
+      const formatPhone = (value) => (/^\d{10}$/.test(value) ? `+91 ${value.slice(0, 5)} ${value.slice(5)}` : value);
+      const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+      const formatDate = (value) =>
+        new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
+          weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        });
+      const formatTime = (value) => {
+        const [h, m] = value.split(':').map(Number);
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+      };
+
+      const anyModalOpen = () => !!document.querySelector('[data-modal]:not(.hidden)');
+      const syncScrollLock = () => document.body.classList.toggle('overflow-hidden', anyModalOpen());
+
+      function showMessage(box, text, tone = 'error') {
+        const tones = {
+          error: 'bg-red-50 text-red-700',
+          info: 'bg-blue-50 text-blue-800',
+          success: 'bg-green-50 text-green-700'
+        };
+        box.textContent = text;
+        box.className = `rounded-lg px-4 py-3 text-sm ${tones[tone]}`;
+      }
+      const clearMessage = (box) => { box.className = 'hidden'; box.textContent = ''; };
+
+      /* All account requests go through here */
+      async function api(path, { method = 'GET', body } = {}) {
+        const response = await fetch(`${API}${path}`, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body: body ? JSON.stringify(body) : undefined
+        });
+
+        let data = {};
+        try { data = await response.json(); } catch (_) { /* no JSON body */ }
+
+        if (!response.ok) {
+          const error = new Error(data.message || 'Something went wrong. Please try again.');
+          error.code = data.code;
+          throw error;
+        }
+        return data;
+      }
+
+      /* ---------- Who is logged in ---------- */
+      function render() {
+        const loggedIn = !!customer;
+
+        el.loginBtn.classList.toggle('hidden', loggedIn);
+        el.userMenu.classList.toggle('hidden', !loggedIn);
+        if (!loggedIn) return;
+
+        el.userInitial.textContent = initialOf(customer.name);
+        el.userFirstName.textContent = firstName(customer.name);
+        el.userFullName.textContent = customer.name;
+
+        el.cardInitial.textContent = initialOf(customer.name);
+        el.cardName.textContent = customer.name;
+        el.cardPhone.textContent = formatPhone(customer.phone);
+        el.cardEmail.textContent = customer.email;
+      }
+
+      function setCustomer(next) {
+        customer = next;
+        render();
+        listeners.forEach((listener) => listener(customer));
+      }
+
+      /* ---------- User card ---------- */
+      function setMenu(open) {
+        el.userCard.classList.toggle('hidden', !open);
+        el.userBtn.setAttribute('aria-expanded', String(open));
+      }
+
+      el.userBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setMenu(el.userCard.classList.contains('hidden'));
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!el.userMenu.contains(event.target)) setMenu(false);
+      });
+
+      el.userCard.querySelectorAll('[data-menu-link]').forEach((link) =>
+        link.addEventListener('click', () => setMenu(false))
+      );
+
+      el.logoutBtn.addEventListener('click', async () => {
+        setMenu(false);
+        try { await api('/logout', { method: 'POST' }); } catch (_) { /* log out on screen anyway */ }
+        closeHistory();
+        setCustomer(null);
+      });
+
+      /* ---------- Log in / Register popup ---------- */
+      const AUTH_TEXT = {
+        login:    { title: 'Welcome back', subtitle: 'Enter your phone number to log in.' },
+        register: { title: 'Create your account', subtitle: 'Just your name, phone number and email.' }
+      };
+
+      function setAuthMode(mode) {
+        const isLogin = mode === 'login';
+
+        el.loginForm.classList.toggle('hidden', !isLogin);
+        el.registerForm.classList.toggle('hidden', isLogin);
+        el.authTitle.textContent = AUTH_TEXT[mode].title;
+        el.authSubtitle.textContent = AUTH_TEXT[mode].subtitle;
+
+        el.authModal.querySelectorAll('[data-auth-tab]').forEach((tab) => {
+          const active = tab.dataset.authTab === mode;
+          tab.classList.toggle('tab--active', active);
+          tab.setAttribute('aria-selected', String(active));
+        });
+
+        (isLogin ? el.loginPhone : el.registerName).focus();
+      }
+
+      function openAuth(mode = 'login') {
+        if (customer) return;
+        clearMessage(el.loginMessage);
+        clearMessage(el.registerMessage);
+        el.authModal.classList.remove('hidden');
+        syncScrollLock();
+        setAuthMode(mode);
+      }
+
+      function closeAuth() {
+        el.authModal.classList.add('hidden');
+        syncScrollLock();
+      }
+
+      document.addEventListener('click', (event) => {
+        const opener = event.target.closest('[data-auth-open]');
+        if (opener) openAuth(opener.dataset.authOpen || 'login');
+      });
+      el.authModal.querySelectorAll('[data-auth-close]').forEach((closer) => closer.addEventListener('click', closeAuth));
+      el.authModal.querySelectorAll('[data-auth-tab]').forEach((tab) =>
+        tab.addEventListener('click', () => setAuthMode(tab.dataset.authTab))
+      );
+
+      async function submitAuth(form, button, idleText, busyText, messageBox, request) {
+        clearMessage(messageBox);
+        button.disabled = true;
+        button.textContent = busyText;
+
+        try {
+          const data = await request();
+          form.reset();
+          closeAuth();
+          setCustomer(data.customer);
+        } catch (error) {
+          showMessage(messageBox, error.message);
+          return error;
+        } finally {
+          button.disabled = false;
+          button.textContent = idleText;
+        }
+        return null;
+      }
+
+      el.loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const phone = el.loginPhone.value.trim();
+
+        if (!phone) return showMessage(el.loginMessage, 'Please enter your phone number.');
+
+        const error = await submitAuth(el.loginForm, el.loginSubmit, 'Log in', 'Logging in…', el.loginMessage,
+          () => api('/login', { method: 'POST', body: { phone } }));
+
+        /* No account for this number: move to the register form with the number filled in */
+        if (error && error.code === 'not_found') {
+          setAuthMode('register');
+          el.registerPhone.value = phone;
+          el.registerName.focus();
+          showMessage(el.registerMessage, 'No account found for this number yet. Fill in your details to register.', 'info');
+        }
+      });
+
+      el.registerForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const body = {
+          name: el.registerName.value.trim(),
+          phone: el.registerPhone.value.trim(),
+          email: el.registerEmail.value.trim()
+        };
+
+        if (!body.name || !body.phone || !body.email) {
+          return showMessage(el.registerMessage, 'Please enter your name, phone number and email.');
+        }
+
+        const error = await submitAuth(el.registerForm, el.registerSubmit, 'Create account', 'Creating account…', el.registerMessage,
+          () => api('/register', { method: 'POST', body }));
+
+        /* Already registered: move to log in with the number filled in */
+        if (error && error.code === 'exists') {
+          setAuthMode('login');
+          el.loginPhone.value = body.phone;
+          showMessage(el.loginMessage, 'This number is already registered. Log in below.', 'info');
+        }
+      });
+
+      /* ---------- Booking history ---------- */
+      const STATUS_STYLES = {
+        pending:   'bg-amber-50 text-amber-700 ring-amber-600/20',
+        confirmed: 'bg-green-50 text-green-700 ring-green-600/20',
+        completed: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+        cancelled: 'bg-red-50 text-red-700 ring-red-600/20'
+      };
+      const STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled' };
+
+      function node(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      }
+
+      function badge(text, style) {
+        return node('span', `inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${style}`, text);
+      }
+
+      function historyItem(booking) {
+        const paid = booking.paymentStatus === 'paid';
+        const item = node('li', 'rounded-2xl p-4 ring-1 ring-neutral-200');
+
+        const top = node('div', 'flex items-start justify-between gap-3');
+        top.append(
+          node('p', 'font-semibold text-neutral-900', formatDate(booking.date)),
+          badge(STATUS_LABELS[booking.status] || booking.status, STATUS_STYLES[booking.status] || STATUS_STYLES.pending)
+        );
+
+        const time = node('p', 'mt-1 text-sm text-neutral-600',
+          `${formatTime(booking.startTime)} – ${formatTime(booking.endTime)} · ${plural(booking.hours, 'hour')}`);
+
+        const bottom = node('div', 'mt-3 flex items-center justify-between gap-3');
+        bottom.append(
+          node('p', 'font-bold text-neutral-900', `₹${Number(booking.amount).toLocaleString('en-IN')}`),
+          badge(paid ? 'Paid' : 'Unpaid', paid
+            ? 'bg-green-50 text-green-700 ring-green-600/20'
+            : 'bg-neutral-100 text-neutral-600 ring-neutral-500/20')
+        );
+
+        item.append(top, time, bottom);
+        return item;
+      }
+
+      function setHistoryLoading(loading) {
+        el.historyLoading.classList.toggle('hidden', !loading);
+        el.historyLoading.classList.toggle('flex', loading);
+      }
+
+      async function openHistory() {
+        if (!customer) return;
+
+        el.historyModal.classList.remove('hidden');
+        syncScrollLock();
+        el.historyPanel.focus();
+
+        el.historyList.replaceChildren();
+        el.historyEmpty.classList.add('hidden');
+        el.historyError.classList.add('hidden');
+        el.historySummary.textContent = '';
+        setHistoryLoading(true);
+
+        try {
+          const data = await api('/bookings');
+
+          el.historyList.replaceChildren(...data.bookings.map(historyItem));
+          el.historyEmpty.classList.toggle('hidden', data.bookings.length > 0);
+          el.historySummary.textContent = data.bookings.length
+            ? `${plural(data.totals.bookings, 'booking')} · ${plural(data.totals.hours, 'hour')} in total`
+            : '';
+        } catch (error) {
+          el.historyError.textContent = error.message;
+          el.historyError.classList.remove('hidden');
+        } finally {
+          setHistoryLoading(false);
+        }
+      }
+
+      function closeHistory() {
+        el.historyModal.classList.add('hidden');
+        syncScrollLock();
+      }
+
+      el.historyOpen.addEventListener('click', () => { setMenu(false); openHistory(); });
+      el.historyModal.querySelectorAll('[data-history-close]').forEach((closer) => closer.addEventListener('click', closeHistory));
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        setMenu(false);
+        if (!el.authModal.classList.contains('hidden')) closeAuth();
+        else if (!el.historyModal.classList.contains('hidden')) closeHistory();
+      });
+
+      /* The booking form below reads the logged-in customer from here */
+      window.TurfAccount = {
+        get customer() { return customer; },
+        onChange(listener) { listeners.add(listener); }
+      };
+
+      render();
+    })();
+  </script>
+
+  <script>
     /* ================= Slot booking ================= */
     (() => {
       'use strict';
@@ -387,15 +1148,26 @@
       /* ---------- Config ---------- */
       const SLUG  = <%- JSON.stringify(tenant.slug) %>;
       const PRICE = <%= price %>;
+      const PAST_CHECK_MS = 30000; // re-check for slots whose time has gone
 
       /* ---------- Elements ---------- */
       const $ = (id) => document.getElementById(id);
       const el = {
         date: $('bookingDate'),
+        dateStrip: $('dateStrip'),
         grid: $('slotGrid'),
         loading: $('slotLoading'),
         error: $('slotError'),
         empty: $('slotEmpty'),
+        bar: $('selectionBar'),
+        barCount: $('barCount'),
+        barPrice: $('barPrice'),
+        next: $('nextBtn'),
+        modal: $('bookingModal'),
+        panel: $('modalPanel'),
+        formView: $('formView'),
+        successView: $('successView'),
+        successText: $('successText'),
         summaryDate: $('summaryDate'),
         summaryTime: $('summaryTime'),
         summaryDuration: $('summaryDuration'),
@@ -405,10 +1177,18 @@
         message: $('bookingMessage'),
         name: $('customerName'),
         phone: $('customerPhone'),
-        email: $('customerEmail')
+        email: $('customerEmail'),
+        guestFields: $('guestFields'),
+        memberBox: $('memberBox'),
+        memberInitial: $('memberInitial'),
+        memberName: $('memberName'),
+        memberContact: $('memberContact')
       };
 
+      const account = window.TurfAccount; // who is logged in (see the account script above)
+
       /* ---------- State ---------- */
+      let allSlots = [];       // everything the server returned for the chosen date
       let selectedSlots = [];
 
       const SLOT_STATES = {
@@ -418,9 +1198,69 @@
       };
 
       /* ---------- Helpers ---------- */
+      const pad = (n) => String(n).padStart(2, '0');
+
+      const localToday = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      };
+
+      /* Build the next 20 local dates as compact, horizontally scrollable date chips. */
+      function renderDateStrip() {
+        const start = new Date();
+        start.setHours(12, 0, 0, 0);
+        const todayValue = localToday();
+        const dates = Array.from({ length: 20 }, (_, index) => {
+          const date = new Date(start);
+          date.setDate(start.getDate() + index);
+          const value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+          return { date, value };
+        });
+
+        el.dateStrip.replaceChildren(...dates.map(({ date, value }, index) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.date = value;
+          button.className = 'date-chip flex min-w-[62px] shrink-0 flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
+          button.setAttribute('aria-pressed', String(value === el.date.value));
+          button.innerHTML = `<span class="text-[11px] font-semibold uppercase tracking-wide"></span><span class="mt-1 text-xl font-extrabold leading-none"></span><span class="mt-1 text-[11px]"></span>`;
+          const labels = button.querySelectorAll('span');
+          labels[0].textContent = index === 0 ? 'Today' : date.toLocaleDateString('en-IN', { weekday: 'short' });
+          labels[1].textContent = date.getDate();
+          labels[2].textContent = date.toLocaleDateString('en-IN', { month: 'short' });
+          button.addEventListener('click', () => {
+            if (el.date.value === value) return;
+            el.date.value = value;
+            updateDateChipState();
+            loadSlots();
+          });
+          return button;
+        }));
+        updateDateChipState();
+      }
+
+      function updateDateChipState() {
+        el.dateStrip.querySelectorAll('[data-date]').forEach((button) => {
+          const active = button.dataset.date === el.date.value;
+          button.className = `date-chip flex min-w-[62px] shrink-0 flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${active ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:border-blue-300 hover:bg-blue-50'}`;
+          button.setAttribute('aria-pressed', String(active));
+        });
+        const selected = el.dateStrip.querySelector(`[data-date="${el.date.value}"]`);
+        if (selected && typeof selected.scrollIntoView === 'function') {
+          selected.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        }
+      }
+
       const toMinutes = (value) => {
         const [h, m] = value.split(':').map(Number);
         return h * 60 + m;
+      };
+
+      /* A slot is gone once its start time has passed (only relevant for today) */
+      const isPast = (slot) => {
+        if (el.date.value !== localToday()) return false;
+        const now = new Date();
+        return toMinutes(slot.startTime) <= now.getHours() * 60 + now.getMinutes();
       };
 
       const formatDate = (value) =>
@@ -475,25 +1315,69 @@
         }`;
       }
 
+      /* Logged in: show "Booking as ..." instead of the name, phone and email fields */
+      function renderBookingAs() {
+        const customer = account.customer;
+
+        el.memberBox.classList.toggle('hidden', !customer);
+        el.memberBox.classList.toggle('flex', !!customer);
+        el.guestFields.classList.toggle('hidden', !!customer);
+        if (!customer) return;
+
+        el.memberInitial.textContent = String(customer.name || '?').trim().charAt(0).toUpperCase();
+        el.memberName.textContent = customer.name;
+        el.memberContact.textContent = `${customer.phone} · ${customer.email}`;
+      }
+
+
       function updateSummary() {
         el.summaryDate.textContent = el.date.value ? formatDate(el.date.value) : 'Select a date';
 
-        if (!selectedSlots.length) {
+        const count = selectedSlots.length;
+        el.bar.hidden = count === 0;
+
+        if (!count) {
           el.summaryTime.textContent = 'No slots selected';
           el.summaryDuration.textContent = '0 hours';
           el.summaryPrice.textContent = '0';
-          el.submit.disabled = true;
-          el.submit.textContent = 'Select slots first';
+          el.barPrice.textContent = '0';
           return;
         }
 
-        const count = selectedSlots.length;
+        const total = (PRICE * count).toLocaleString('en-IN');
         el.summaryTime.textContent = toRanges(selectedSlots).join(', ');
         el.summaryDuration.textContent = plural(count, 'hour');
-        el.summaryPrice.textContent = (PRICE * count).toLocaleString('en-IN');
-        el.submit.disabled = false;
+        el.summaryPrice.textContent = total;
+        el.barCount.textContent = plural(count, 'slot') + ' selected';
+        el.barPrice.textContent = total;
         el.submit.textContent = `Request ${plural(count, 'slot')}`;
       }
+
+      /* ---------- Popup ---------- */
+      const anyModalOpen = () => !!document.querySelector('[data-modal]:not(.hidden)');
+
+      function openModal() {
+        if (!selectedSlots.length) return;
+        updateSummary();
+        renderBookingAs();
+        el.message.className = 'hidden';
+        el.formView.classList.remove('hidden');
+        el.successView.classList.add('hidden');
+        el.modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        el.panel.focus();
+      }
+
+      function closeModal() {
+        el.modal.classList.add('hidden');
+        document.body.classList.toggle('overflow-hidden', anyModalOpen());
+      }
+
+      /* Logging in or out while the booking popup is open updates it straight away */
+      account.onChange(() => {
+        renderBookingAs();
+        el.message.className = 'hidden';
+      });
 
       /* ---------- Slots ---------- */
       function setSlotState(button, state) {
@@ -524,12 +1408,17 @@
 
         const time = document.createElement('div');
         time.className = 'slot-time';
-        time.textContent = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`;
+        time.textContent = formatTime(slot.startTime);
 
-        button.append(status, time);
+        const end = document.createElement('div');
+        end.className = 'slot-end';
+        end.textContent = `to ${formatTime(slot.endTime)}`;
+
+        button.append(status, time, end);
 
         if (slot.available) {
-          setSlotState(button, 'available');
+          const isSelected = selectedSlots.some((s) => isSameSlot(s, slot));
+          setSlotState(button, isSelected ? 'selected' : 'available');
           button.addEventListener('click', () => toggleSlot(slot, button));
         } else {
           setSlotState(button, 'booked');
@@ -538,9 +1427,17 @@
         return button;
       }
 
-      function renderSlots(slots) {
-        el.grid.replaceChildren(...slots.map(createSlotButton));
-        el.empty.classList.toggle('hidden', slots.length > 0);
+      /* Draws the slots, leaving out any whose time has already passed */
+      function renderSlots() {
+        const visible = allSlots.filter((slot) => !isPast(slot));
+
+        selectedSlots = selectedSlots.filter((sel) =>
+          visible.some((v) => v.available && isSameSlot(v, sel))
+        );
+
+        el.grid.replaceChildren(...visible.map(createSlotButton));
+        el.empty.classList.toggle('hidden', visible.length > 0);
+        updateSummary();
       }
 
       async function loadSlots() {
@@ -548,6 +1445,7 @@
         if (!date) return;
 
         selectedSlots = [];
+        allSlots = [];
         updateSummary();
         el.grid.replaceChildren();
         el.empty.classList.add('hidden');
@@ -560,13 +1458,27 @@
           );
           const data = await response.json();
           if (!response.ok) throw new Error(data.message || 'Unable to load availability.');
-          renderSlots(data.slots || []);
+          allSlots = data.slots || [];
+          renderSlots();
         } catch (error) {
           showError(error.message || 'Unable to load slots.');
         } finally {
           setLoading(false);
         }
       }
+
+      /* Remove slots as their time passes while the page stays open */
+      setInterval(() => {
+        if (!allSlots.length) return;
+        const hadSelection = selectedSlots.length > 0;
+        renderSlots();
+
+        const formOpen = !el.modal.classList.contains('hidden') && !el.formView.classList.contains('hidden');
+        if (hadSelection && !selectedSlots.length && formOpen) {
+          closeModal();
+          showError('The time for your selected slot has passed. Please choose another slot.');
+        }
+      }, PAST_CHECK_MS);
 
       /* ---------- Booking request ---------- */
       async function submitBooking(event) {
@@ -576,25 +1488,29 @@
           return showMessage('Please select at least one available slot.');
         }
 
-        const customerName  = el.name.value.trim();
-        const customerPhone = el.phone.value.trim();
-        const customerEmail = el.email.value.trim();
+        /* Logged in: the server uses the saved details. Otherwise they come from the form. */
+        const details = {};
 
-        if (!customerName || !customerPhone) {
-          return showMessage('Please enter your name and phone number.');
+        if (!account.customer) {
+          details.customerName  = el.name.value.trim();
+          details.customerPhone = el.phone.value.trim();
+          details.customerEmail = el.email.value.trim();
+
+          if (!details.customerName || !details.customerPhone) {
+            return showMessage('Please enter your name and phone number.');
+          }
         }
 
         el.submit.disabled = true;
         el.submit.textContent = 'Sending request…';
+        let failure = null;
 
         try {
           const response = await fetch(`/public-booking/${encodeURIComponent(SLUG)}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              customerName,
-              customerPhone,
-              customerEmail,
+              ...details,
               date: el.date.value,
               slots: selectedSlots.map(({ startTime, endTime }) => ({ startTime, endTime }))
             })
@@ -603,17 +1519,41 @@
           if (!response.ok) throw new Error(data.message || 'Booking failed.');
 
           el.form.reset();
-          showMessage(data.message || 'Booking request sent.', true);
+          el.successText.textContent = data.message || 'Booking request sent. The turf owner will confirm it.';
+          el.formView.classList.add('hidden');
+          el.successView.classList.remove('hidden');
         } catch (error) {
-          showMessage(error.message || 'Something went wrong.');
+          failure = error.message || 'Something went wrong.';
         } finally {
+          el.submit.disabled = false;
           await loadSlots(); // refresh availability and reset selection either way
+        }
+
+        if (failure) {
+          closeModal();
+          showError(failure);
         }
       }
 
       /* ---------- Init ---------- */
-      el.date.addEventListener('change', loadSlots);
+      const today = localToday();       // use the visitor's own date, not the server's
+      el.date.min = today;
+      el.date.value = today;
+      renderDateStrip();
+
+      el.date.addEventListener('change', () => {
+        updateDateChipState();
+        loadSlots();
+      });
       el.form.addEventListener('submit', submitBooking);
+      el.next.addEventListener('click', openModal);
+      el.modal.querySelectorAll('[data-close]').forEach((node) => node.addEventListener('click', closeModal));
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !el.modal.classList.contains('hidden') && document.getElementById('authModal').classList.contains('hidden')) {
+          closeModal();
+        }
+      });
+      renderBookingAs();
       loadSlots();
     })();
   </script>

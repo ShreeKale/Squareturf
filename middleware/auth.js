@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { nextStepPath } = require('../utils/onboarding');
 
 const renderDenied = (res, message) =>
   res.status(403).render('error', { title: 'Access denied', message });
@@ -21,10 +22,15 @@ exports.requireAuth = async (req, res, next) => {
   }
 };
 
+/* Owner pages: finish sign-up first if it is not complete */
 exports.requireOwner = (req, res, next) => {
-  if (!req.user || req.user.role !== 'owner' || !req.user.tenant) {
+  if (!req.user || req.user.role !== 'owner') {
     return renderDenied(res, 'An owner account is required.');
   }
+
+  const unfinished = nextStepPath(req.user, req.user.tenant);
+  if (unfinished) return res.redirect(unfinished);
+
   next();
 };
 
