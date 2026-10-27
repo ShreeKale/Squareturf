@@ -1,0 +1,6 @@
+node_modules
+.env
+.env.local
+public/uploads
+testmail.js
+README.md

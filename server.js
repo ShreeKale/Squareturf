@@ -7,23 +7,19 @@ const MongoStore = require('connect-mongo');
 const morgan = require('morgan');
 const path = require('path');
 const bcrypt = require('bcryptjs');
-const slugify = require('slugify');
 
 const User = require('./models/User');
 const Tenant = require('./models/Tenant');
 const Booking = require('./models/Booking');
 const Plan = require('./models/Plan');
+const Customer = require('./models/Customer');
 
 const { requireAuth, requireOwner, requireAdmin } = require('./middleware/auth');
 const tenantResolver = require('./middleware/tenant');
 
 const {
-  RESERVED_SLUGS,
-  SLUG_PATTERN,
-  SPORTS,
   MAX_SLOTS_PER_REQUEST,
   asyncHandler,
-  cleanSlug,
   getLocalDateString,
   getLocalTimeString,
   isValidDateString,
@@ -32,28 +28,31 @@ const {
   overlaps,
   slotKey,
   normalizeSlots,
+  normalizePhone,
+  isValidEmail,
+  groupConsecutive,
   parseImages,
   parseServices
 } = require('./utils/helpers');
 
 const { buildAnalytics } = require('./utils/analytics');
+const { createRateLimiter } = require('./utils/rateLimit');
+const { isOperatingDay, nextStepPath } = require('./utils/onboarding');
+const { themeFor } = require('./utils/themes');
+const { startEmailVerification, initMail } = require('./utils/mailer');
+const { connectDb } = require('./utils/db');
+const onboardingRouter = require('./routes/onboarding');
 
 const app = express();
-app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 5000;
+const BASE_DOMAIN = String(process.env.BASE_DOMAIN || 'localhost').toLowerCase();
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const MONGO_URI = process.env.MONGO_URI || (IS_PRODUCTION ? '' : 'mongodb://127.0.0.1:27017/squareturf');
-const SESSION_SECRET = process.env.SESSION_SECRET || (IS_PRODUCTION ? '' : 'squareturf-development-secret');
-const BASE_DOMAIN = process.env.BASE_DOMAIN || 'localhost';
+const IS_LOCAL = BASE_DOMAIN === 'localhost';
 
-// Fail early rather than silently connecting to a local database in production.
-if (!MONGO_URI) {
-  throw new Error('MONGO_URI is required. Set it in your local .env or Vercel Environment Variables.');
-}
-if (!SESSION_SECRET) {
-  throw new Error('SESSION_SECRET is required in production. Set it in Vercel Environment Variables.');
-}
+/* Turf websites on their own subdomain (royalturf.yourdomain.com) need your own domain with a wildcard DNS record.
+   On a plain *.vercel.app address they cannot work, so turf pages are linked as /turf/royalturf instead. */
+const USE_SUBDOMAINS = !IS_LOCAL && BASE_DOMAIN.includes('.') && !BASE_DOMAIN.endsWith('.vercel.app');
 
 const ACTIVE_BOOKING_STATUSES = ['pending', 'confirmed'];
 const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed'];
@@ -70,32 +69,98 @@ const getReturnPath = (value) => (RETURN_PATHS.has(value) ? value : '/dashboard/
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+/* Vercel sits in front of the app: trust it for the real IP, host name and https */
+app.set('trust proxy', 1);
+
+if (IS_PRODUCTION && !process.env.SESSION_SECRET) {
+  console.warn('SESSION_SECRET is not set. Add a long random value in your environment variables.');
+}
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(morgan('dev'));
+app.use(morgan(IS_PRODUCTION ? 'combined' : 'dev'));
 
-app.use(
-  session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: MONGO_URI }),
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7,
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production'
+/* Connects to MongoDB once, and adds the plans and the admin account once, for each server instance */
+let ready = null;
+function ensureReady() {
+  if (!ready) {
+    ready = connectDb()
+      .then(async () => {
+        await seedPlans();
+        await createAdmin();
+        initMail();
+      })
+      .catch((error) => {
+        ready = null; // try again on the next request
+        throw error;
+      });
+  }
+  return ready;
+}
+
+/* Open this address to check the database: /healthz */
+app.get('/healthz', async (req, res) => {
+  try {
+    await ensureReady();
+    res.json({ ok: true, database: 'connected' });
+  } catch (error) {
+    res.status(503).json({ ok: false, database: 'not connected', fix: error.hint || 'See the server log.' });
+  }
+});
+
+/* Everything below needs the database. If it is down, show a clear page instead of hanging. */
+app.use((req, res, next) => {
+  ensureReady().then(
+    () => next(),
+    (error) => {
+      console.error('Database not available:', error.message);
+      res.status(503).render('error', {
+        title: 'Service unavailable',
+        message: 'We cannot reach the database right now. Please try again in a moment.'
+      });
     }
-  })
-);
+  );
+});
+
+/* The session store is created after the database is connected, and shares its connection */
+let sessionMiddleware = null;
+app.use((req, res, next) => {
+  if (!sessionMiddleware) {
+    sessionMiddleware = session({
+      secret: process.env.SESSION_SECRET || 'squareturf-development-secret',
+      resave: false,
+      saveUninitialized: false,
+      store: MongoStore.create({ client: mongoose.connection.getClient() }),
+      cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: IS_PRODUCTION
+      }
+    });
+  }
+  sessionMiddleware(req, res, next);
+});
 
 /* Values every view can use */
 app.use((req, res, next) => {
-  res.locals.currentUser = null;
+  res.locals.currentUser = null; // replaced by requireAuth on logged-in pages
   res.locals.isLoggedIn = Boolean(req.session.userId);
   res.locals.baseDomain = BASE_DOMAIN;
   res.locals.port = PORT;
+
+  /* Public address of a turf website, for links and for showing to the owner */
+  const origin = `${req.protocol}://${req.get('host')}`;
+  res.locals.siteUrlFor = (slug) =>
+    USE_SUBDOMAINS ? `https://${slug}.${BASE_DOMAIN}`
+    : IS_LOCAL ? `http://${slug}.localhost:${PORT}`
+    : `${origin}/turf/${slug}`;
+  res.locals.siteLabelFor = (slug) =>
+    USE_SUBDOMAINS ? `${slug}.${BASE_DOMAIN}`
+    : IS_LOCAL ? `${slug}.localhost`
+    : `${req.get('host')}/turf/${slug}`;
+  res.locals.useSubdomains = USE_SUBDOMAINS || IS_LOCAL;
 
   /* One-time message set with req.session.flash */
   res.locals.flash = req.session.flash || null;
@@ -104,41 +169,10 @@ app.use((req, res, next) => {
   next();
 });
 
-/*
- * Vercel runs this app as a serverless function, so it does not execute
- * startServer(). Connect to MongoDB on demand and reuse the connection
- * between warm invocations. Local development is initialized by startServer().
- */
-let databaseSetupPromise = null;
-
-async function ensureDatabase() {
-  if (mongoose.connection.readyState === 1) return;
-  if (databaseSetupPromise) return databaseSetupPromise;
-
-  databaseSetupPromise = (async () => {
-    await mongoose.connect(MONGO_URI);
-    await seedPlans();
-    await createAdmin();
-    console.log('MongoDB connected and SquareTurf data initialized');
-  })();
-
-  try {
-    await databaseSetupPromise;
-  } finally {
-    databaseSetupPromise = null;
-  }
-}
-
-app.use(async (req, res, next) => {
-  try {
-    await ensureDatabase();
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
 app.use(tenantResolver);
+
+/* Sign-up steps 2 to 6 (step 1 is /register) */
+app.use('/onboarding', onboardingRouter);
 
 /* =========================================================
    HELPERS
@@ -152,8 +186,54 @@ const getPublicTenant = (slug) =>
     ? Tenant.findOne({ slug: String(slug).toLowerCase(), isPublished: true }).lean()
     : null;
 
+/* ---------- Customer session (one logged-in customer per turf website) ---------- */
+
+const customerLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 30 });
+
+const toCustomerView = ({ name, phone, email }) => ({ name, phone, email });
+
+async function getSessionCustomer(req, tenant) {
+  const id = (req.session.customers || {})[String(tenant._id)];
+
+  if (!id || !mongoose.isValidObjectId(id)) return null;
+  return Customer.findOne({ _id: id, tenant: tenant._id }).lean();
+}
+
+function setSessionCustomer(req, tenant, customer) {
+  req.session.customers = { ...req.session.customers, [String(tenant._id)]: String(customer._id) };
+}
+
+function clearSessionCustomer(req, tenant) {
+  const customers = { ...req.session.customers };
+  delete customers[String(tenant._id)];
+  req.session.customers = customers;
+}
+
+async function renderTurfPage(req, res, tenant) {
+  const customer = await getSessionCustomer(req, tenant);
+
+  res.render('public-turf', {
+    title: tenant.name,
+    tenant,
+    customer: customer ? toCustomerView(customer) : null,
+    theme: themeFor(tenant.theme)
+  });
+}
+
+/* Finds the published turf for /api/public/:slug/... routes and puts it on req.turf */
+const loadPublicTurf = asyncHandler(async (req, res, next) => {
+  const tenant = await getPublicTenant(req.params.slug);
+
+  if (!tenant) return res.status(404).json({ message: 'Turf not found.' });
+
+  req.turf = tenant;
+  next();
+});
+
 /* Hourly slots for a date, each marked available or booked */
 async function getAvailability(tenant, date) {
+  if (!isOperatingDay(tenant, date)) return []; // closed that day
+
   const bookings = await Booking.find({
     tenant: tenant._id,
     date,
@@ -172,16 +252,14 @@ async function getAvailability(tenant, date) {
    PUBLIC PAGES
 ========================================================= */
 
-app.get('/', (req, res) => {
-  if (req.publicTenant) {
-    return res.render('public-turf', {
-      title: req.publicTenant.name,
-      tenant: req.publicTenant
-    });
-  }
+app.get(
+  '/',
+  asyncHandler(async (req, res) => {
+    if (req.publicTenant) return renderTurfPage(req, res, req.publicTenant);
 
-  res.render('home', { title: 'SquareTurf' });
-});
+    res.render('home', { title: 'SquareTurf' });
+  })
+);
 
 app.get(
   '/turf/:slug',
@@ -192,7 +270,7 @@ app.get(
       return renderError(res, 404, 'Turf not found', 'This turf website is unavailable.');
     }
 
-    res.render('public-turf', { title: tenant.name, tenant });
+    await renderTurfPage(req, res, tenant);
   })
 );
 
@@ -239,9 +317,31 @@ app.post(
     const tenant = await getPublicTenant(req.params.slug);
     if (!tenant) return res.status(404).json({ message: 'Turf not found.' });
 
-    const { customerName, customerPhone, customerEmail, date, slots } = req.body;
+    const { date, slots } = req.body;
 
-    if (!customerName || !customerPhone || !date || !Array.isArray(slots) || !slots.length) {
+    /* A logged-in customer's saved details are used, so nothing is asked again */
+    const customer = await getSessionCustomer(req, tenant);
+    const contact = customer
+      ? {
+          customer: customer._id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          customerEmail: customer.email
+        }
+      : {
+          customer: null,
+          customerName: String(req.body.customerName || '').trim(),
+          customerPhone: String(req.body.customerPhone || '').trim(),
+          customerEmail: String(req.body.customerEmail || '').trim().toLowerCase()
+        };
+
+    if (
+      !contact.customerName ||
+      !contact.customerPhone ||
+      !date ||
+      !Array.isArray(slots) ||
+      !slots.length
+    ) {
       return res.status(400).json({
         message: 'Please select at least one slot and complete your details.'
       });
@@ -256,6 +356,9 @@ app.post(
     }
     if (date < getLocalDateString()) {
       return res.status(400).json({ message: 'Past dates cannot be booked.' });
+    }
+    if (!isOperatingDay(tenant, date)) {
+      return res.status(400).json({ message: 'The turf is closed on that day. Please choose another date.' });
     }
 
     const selected = normalizeSlots(slots);
@@ -290,9 +393,7 @@ app.post(
     await Booking.insertMany(
       selected.map((slot) => ({
         tenant: tenant._id,
-        customerName: String(customerName).trim(),
-        customerPhone: String(customerPhone).trim(),
-        customerEmail: customerEmail ? String(customerEmail).trim().toLowerCase() : '',
+        ...contact,
         date,
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -314,92 +415,169 @@ app.post(
 );
 
 /* =========================================================
+   CUSTOMER ACCOUNTS (public turf website)
+   Register with name, email and phone. Log in with the phone number only.
+========================================================= */
+
+app.post(
+  '/api/public/:slug/customer/register',
+  customerLimiter,
+  loadPublicTurf,
+  asyncHandler(async (req, res) => {
+    const name = String(req.body.name || '').trim().slice(0, 100);
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const phone = normalizePhone(req.body.phone);
+
+    if (!name || !email || !String(req.body.phone || '').trim()) {
+      return res.status(400).json({ message: 'Please enter your name, email and phone number.' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address.' });
+    }
+    if (!phone) {
+      return res.status(400).json({ message: 'Please enter a valid 10-digit phone number.' });
+    }
+
+    const alreadyRegistered = () =>
+      res.status(409).json({
+        message: 'This number is already registered. Please log in instead.',
+        code: 'exists'
+      });
+
+    if (await Customer.exists({ tenant: req.turf._id, phone })) return alreadyRegistered();
+
+    try {
+      const customer = await Customer.create({ tenant: req.turf._id, name, email, phone });
+
+      setSessionCustomer(req, req.turf, customer);
+      res.status(201).json({ customer: toCustomerView(customer) });
+    } catch (error) {
+      if (error.code === 11000) return alreadyRegistered(); // two sign-ups at the same moment
+      throw error;
+    }
+  })
+);
+
+app.post(
+  '/api/public/:slug/customer/login',
+  customerLimiter,
+  loadPublicTurf,
+  asyncHandler(async (req, res) => {
+    const phone = normalizePhone(req.body.phone);
+
+    if (!phone) {
+      return res.status(400).json({ message: 'Please enter a valid 10-digit phone number.' });
+    }
+
+    const customer = await Customer.findOne({ tenant: req.turf._id, phone }).lean();
+
+    if (!customer) {
+      return res.status(404).json({
+        message: 'No account found for this number. Please register.',
+        code: 'not_found'
+      });
+    }
+
+    setSessionCustomer(req, req.turf, customer);
+    res.json({ customer: toCustomerView(customer) });
+  })
+);
+
+app.post(
+  '/api/public/:slug/customer/logout',
+  loadPublicTurf,
+  (req, res) => {
+    clearSessionCustomer(req, req.turf);
+    res.json({ ok: true });
+  }
+);
+
+/* The logged-in customer's booking history on this turf */
+app.get(
+  '/api/public/:slug/customer/bookings',
+  loadPublicTurf,
+  asyncHandler(async (req, res) => {
+    const customer = await getSessionCustomer(req, req.turf);
+
+    if (!customer) {
+      return res.status(401).json({ message: 'Please log in to see your bookings.' });
+    }
+
+    const bookings = await Booking.find({ tenant: req.turf._id, customer: customer._id }).lean();
+    const sessions = groupConsecutive(bookings);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      bookings: sessions,
+      totals: {
+        bookings: sessions.length,
+        hours: sessions.reduce((total, session) => total + session.hours, 0)
+      }
+    });
+  })
+);
+
+/* =========================================================
    AUTHENTICATION
 ========================================================= */
 
 app.get('/register', (req, res) => {
+  if (req.session.userId) return res.redirect('/onboarding');
+
   res.render('register', { title: 'Create account', error: null, values: {} });
 });
 
+/* Step 1 of sign-up: create the account, then verify the email at /onboarding/verify */
 app.post(
   '/register',
   asyncHandler(async (req, res) => {
     const values = {
-      name: String(req.body.name || '').trim(),
+      name: String(req.body.name || '').trim().slice(0, 100),
       email: String(req.body.email || '').trim().toLowerCase(),
-      phone: String(req.body.phone || '').trim(),
-      turfName: String(req.body.turfName || '').trim(),
-      sport: SPORTS.includes(req.body.sport) ? req.body.sport : 'Cricket',
-      slug: cleanSlug(req.body.slug),
-      address: String(req.body.address || '').trim()
+      phone: String(req.body.phone || '').trim()
     };
     const password = String(req.body.password || '');
 
     const fail = (status, error) =>
       res.status(status).render('register', { title: 'Create account', error, values });
 
-    if (!values.name || !values.email || !values.turfName || !password) {
-      return fail(400, 'Please fill all required fields.');
+    if (!values.name || !values.email || !values.phone || !password) {
+      return fail(400, 'Please fill all fields.');
+    }
+    if (!isValidEmail(values.email)) {
+      return fail(400, 'Please enter a valid email address.');
+    }
+
+    const phone = normalizePhone(values.phone);
+    if (!phone) {
+      return fail(400, 'Please enter a valid 10-digit phone number.');
     }
     if (password.length < 8) {
       return fail(400, 'Password must be at least 8 characters.');
     }
-
-    /* Use the address the owner chose, or make one from the turf name */
-    const slug =
-      values.slug ||
-      cleanSlug(slugify(values.turfName, { lower: true, strict: true })) ||
-      `turf-${Date.now()}`;
-
-    if (!SLUG_PATTERN.test(slug)) {
-      return fail(400, 'Website address must be 3 to 40 letters, numbers or hyphens.');
-    }
-    if (RESERVED_SLUGS.has(slug)) {
-      return fail(400, 'That website address is reserved. Please choose another.');
-    }
-    if (await Tenant.exists({ slug })) {
-      return fail(400, 'That website address is already taken. Please choose another.');
-    }
     if (await User.exists({ email: values.email })) {
-      return fail(400, 'An account with this email already exists.');
+      return fail(400, 'An account with this email already exists. Please log in.');
     }
 
-    const user = await User.create({
-      name: values.name,
-      email: values.email,
-      phone: values.phone,
-      passwordHash: await bcrypt.hash(password, 12),
-      role: 'owner'
-    });
-
+    let user;
     try {
-      const tenant = await Tenant.create({
-        name: values.turfName,
-        slug,
-        owner: user._id,
+      user = await User.create({
+        name: values.name,
         email: values.email,
-        phone: values.phone,
-        address: values.address,
-        sport: values.sport,
-        subscriptionStatus: 'trial',
-        plan: 'basic',
-        isPublished: true
+        phone,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'owner',
+        emailVerified: false
       });
-
-      user.tenant = tenant._id;
-      await user.save();
     } catch (error) {
-      /* Do not leave an owner without a turf behind */
-      await User.deleteOne({ _id: user._id }).catch(() => {});
-
-      if (error.code === 11000) {
-        return fail(400, 'This email or website address is already in use.');
-      }
+      if (error.code === 11000) return fail(400, 'An account with this email already exists. Please log in.');
       throw error;
     }
 
-        req.session.userId = user._id.toString();
-    res.redirect('/dashboard');
+    await startEmailVerification(user);
+
+    req.session.userId = user._id.toString();
+    res.redirect('/onboarding/verify');
   })
 );
 
@@ -427,7 +605,12 @@ app.post(
     }
 
     req.session.userId = user._id.toString();
-    res.redirect(user.role === 'admin' ? '/admin' : '/dashboard');
+
+    if (user.role === 'admin') return res.redirect('/admin');
+
+    /* Owners who have not finished sign-up go back to where they stopped */
+    const tenant = user.tenant ? await Tenant.findById(user.tenant).lean() : null;
+    res.redirect(nextStepPath(user, tenant) || '/dashboard');
   })
 );
 
@@ -465,7 +648,6 @@ app.get(
       tenant,
       total: bookings.length,
       analytics,
-      bookings: recentBookings,
       recentBookings
     });
   })
@@ -838,23 +1020,8 @@ async function seedPlans() {
 }
 
 async function createAdmin() {
-  const configuredEmail = process.env.ADMIN_EMAIL;
-  const configuredPassword = process.env.ADMIN_PASSWORD;
-
-  /*
-   * Never create a publicly deployed admin account with a predictable
-   * default password. Set ADMIN_EMAIL and ADMIN_PASSWORD in Vercel instead.
-   */
-  if (
-    process.env.NODE_ENV === 'production' &&
-    (!configuredEmail || !configuredPassword)
-  ) {
-    console.warn('Admin creation skipped: set ADMIN_EMAIL and ADMIN_PASSWORD.');
-    return;
-  }
-
-  const email = (configuredEmail || 'admin@squareturf.com').toLowerCase();
-  const password = configuredPassword || 'Admin@123';
+  const email = (process.env.ADMIN_EMAIL || 'admin@squareturf.com').toLowerCase();
+  const password = process.env.ADMIN_PASSWORD || 'Admin@123';
 
   if (await User.exists({ email })) return;
 
@@ -869,26 +1036,19 @@ async function createAdmin() {
   console.log(`Admin created: ${email}`);
 }
 
-async function startServer() {
-  try {
-    await ensureDatabase();
-
-    app.listen(PORT, () => {
-      console.log(`SquareTurf running on port ${PORT}`);
-      console.log(`Base domain: ${BASE_DOMAIN}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exitCode = 1;
-  }
-}
-
-/*
- * Local: `node server.js` starts a normal HTTP server.
- * Vercel: imports this Express app as the serverless handler.
- */
-module.exports = app;
-
+/* On your computer: node server.js starts the server. On Vercel the file is only imported (see api/index.js). */
 if (require.main === module) {
-  startServer();
+  ensureReady()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`SquareTurf running on port ${PORT}`);
+        console.log(`Base domain: ${BASE_DOMAIN}`);
+      });
+    })
+    .catch((error) => {
+      console.error('Failed to start server:', error.hint || error.message);
+      process.exit(1);
+    });
 }
+
+module.exports = app;

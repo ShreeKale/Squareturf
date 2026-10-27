@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
   <title><%= title %> | SquareTurf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,36 +13,44 @@
     tailwind.config = { theme: { extend: { fontFamily: { sans: ['"Bricolage Grotesque"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } } };
   </script>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* Stops long words and wide content from pushing a page wider than the phone screen */
+    html { -webkit-text-size-adjust: 100%; }
+    body { overflow-wrap: break-word; }
+    img, svg, video { max-width: 100%; }
+    /* 16px inputs: iPhones zoom into smaller ones when you tap them */
+    @media (max-width: 639px) { input, select, textarea { font-size: 16px !important; } }
+  </style>
 </head>
 <body class="bg-neutral-100 text-neutral-900 antialiased font-sans selection:bg-blue-600 selection:text-white">
 
   <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-neutral-200">
-    <nav class="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between" aria-label="Main">
+    <nav class="max-w-6xl mx-auto px-4 sm:px-5 h-16 flex items-center justify-between gap-2" aria-label="Main">
 
-      <a href="/" class="flex items-center gap-2.5 text-neutral-900 font-extrabold text-lg tracking-tight rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">
-        <span class="flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white font-extrabold">S</span>
-        SquareTurf
+      <a href="/" class="flex min-w-0 items-center gap-2.5 text-neutral-900 font-extrabold text-lg tracking-tight rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-600">
+        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white font-extrabold">S</span>
+        <span class="hidden min-[400px]:inline">SquareTurf</span>
       </a>
 
-      <div class="flex items-center gap-1 sm:gap-2 text-sm font-medium">
-        <a href="/pricing" class="px-3 py-2 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors">Pricing</a>
+      <div class="flex shrink-0 items-center gap-0.5 sm:gap-2 text-sm font-medium">
+        <a href="/pricing" class="px-2.5 sm:px-3 py-2.5 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors">Pricing</a>
 
         <% if (typeof currentUser !== 'undefined' && currentUser) { %>
-          <a href="/dashboard" class="px-3 py-2 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors">Dashboard</a>
-          <form method="post" action="/logout" class="ml-1">
-            <button type="submit" class="px-4 py-2 rounded-lg text-neutral-800 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-100 transition-colors">Log out</button>
+          <a href="<%= currentUser.role === 'admin' ? '/admin' : '/dashboard' %>" class="px-2.5 sm:px-3 py-2.5 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"><%= currentUser.role === 'admin' ? 'Admin' : 'Dashboard' %></a>
+          <form method="post" action="/logout">
+            <button type="submit" class="px-3 sm:px-4 py-2.5 rounded-lg text-neutral-800 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-100 transition-colors">Log out</button>
           </form>
         <% } else { %>
-          <a href="/login" class="px-3 py-2 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors">Log in</a>
-          <a href="/register" class="ml-1 px-4 py-2 rounded-lg bg-neutral-900 text-white font-semibold hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-colors">Get started</a>
+          <a href="/login" class="px-2.5 sm:px-3 py-2.5 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors">Log in</a>
+          <a href="/register" class="ml-0.5 px-3 sm:px-4 py-2.5 rounded-lg bg-neutral-900 text-white font-semibold hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 transition-colors whitespace-nowrap">Get started</a>
         <% } %>
       </div>
     </nav>
   </header>
 
-  <main class="<%= (typeof fullWidth !== 'undefined' && fullWidth) ? '' : 'max-w-6xl mx-auto px-5 py-8' %> min-h-[75vh]">
+  <main class="<%= (typeof fullWidth !== 'undefined' && fullWidth) ? '' : 'max-w-6xl mx-auto px-4 sm:px-5 py-6 sm:py-8' %> min-h-[75vh]">
     <% if (typeof flash !== 'undefined' && flash) { %>
-      <div class="<%= (typeof fullWidth !== 'undefined' && fullWidth) ? 'max-w-6xl mx-auto px-5 pt-5' : 'mb-5' %>">
+      <div class="<%= (typeof fullWidth !== 'undefined' && fullWidth) ? 'max-w-6xl mx-auto px-4 sm:px-5 pt-5' : 'mb-5' %>">
         <div role="status" class="rounded-lg bg-white border border-neutral-300 p-3 text-neutral-800"><%= flash %></div>
       </div>
     <% } %>

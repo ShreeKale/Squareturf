@@ -1,7 +1,14 @@
-node_modules/
+# node_modules/
+# .env
+# .env.*
+# !.env.example
+# npm-debug.log*
+# .DS_Store
+# coverage/
+
+node_modules
 .env
-.env.*
-!.env.example
-npm-debug.log*
-.DS_Store
-coverage/
+.env.local
+public/uploads
+.vercel
+*.log

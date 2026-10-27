@@ -7,32 +7,63 @@ const MAX_ATTEMPTS = 5;
 let transport; // undefined = not set up yet, false = no email service
 
 /*
- * Email is sent with nodemailer when SMTP_HOST is set (see .env). Without it, the email is
- * printed in the server console so sign-up still works while you develop.
+ * Email is sent with nodemailer. Set these in your .env file:
+ *
+ *   SMTP_HOST=smtp.gmail.com
+ *   SMTP_PORT=465
+ *   SMTP_SECURE=true
+ *   SMTP_USER=youraddress@gmail.com
+ *   SMTP_PASS=your-16-letter-app-password
+ *   MAIL_FROM="SquareTurf <youraddress@gmail.com>"
+ *
+ * Without SMTP_HOST the email is only printed in the server console.
  */
 function getTransport() {
   if (transport !== undefined) return transport;
 
   transport = false;
-  if (!process.env.SMTP_HOST) return transport;
 
-  try {
-    const nodemailer = require('nodemailer');
-    transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: process.env.SMTP_USER
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        : undefined
-    });
-  } catch (error) {
-    console.warn('SMTP_HOST is set but nodemailer is not installed. Run: npm install nodemailer');
+  if (!process.env.SMTP_HOST) {
+    console.warn('[mail] SMTP_HOST is not set in .env, so emails are only printed here and NOT sent.');
+    return transport;
   }
+
+  let nodemailer;
+  try {
+    nodemailer = require('nodemailer');
+  } catch (error) {
+    console.warn('[mail] nodemailer is not installed. Run: npm install nodemailer');
+    return transport;
+  }
+
+  const port = Number(process.env.SMTP_PORT || 587);
+  /* Port 465 always uses SSL; other ports use STARTTLS unless SMTP_SECURE says otherwise */
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : port === 465;
+
+  transport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: String(process.env.SMTP_PASS || '').replace(/\s+/g, '') }
+      : undefined,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
+  });
+
+  /* Check the settings once at start-up so a wrong password shows up in the console straight away */
+  transport.verify()
+    .then(() => console.log(`[mail] Ready: sending through ${process.env.SMTP_HOST}:${port} as ${process.env.SMTP_USER || 'no login'}`))
+    .catch((error) => console.error(`[mail] Cannot log in to the email server: ${error.message}`));
+
   return transport;
 }
 
 const mailIsConfigured = () => Boolean(getTransport());
+
+/* Call once when the server starts so the check above runs immediately */
+const initMail = () => { getTransport(); };
 
 async function sendMail({ to, subject, text }) {
   const mailer = getTransport();
@@ -43,15 +74,16 @@ async function sendMail({ to, subject, text }) {
   }
 
   try {
-    await mailer.sendMail({
-      from: process.env.MAIL_FROM || 'SquareTurf <no-reply@squareturf.com>',
+    const info = await mailer.sendMail({
+      from: process.env.MAIL_FROM || process.env.SMTP_USER || 'SquareTurf <no-reply@squareturf.com>',
       to,
       subject,
       text
     });
+    console.log(`[mail] Sent "${subject}" to ${to} (${info.messageId})`);
     return true;
   } catch (error) {
-    console.error('Could not send email:', error.message);
+    console.error(`[mail] Could not send "${subject}" to ${to}: ${error.message}`);
     return false;
   }
 }
@@ -70,7 +102,7 @@ async function startEmailVerification(user) {
   };
   await user.save();
 
-  await sendMail({
+  return sendMail({
     to: user.email,
     subject: 'Your SquareTurf verification code',
     text:
@@ -105,6 +137,7 @@ function resendWaitSeconds(user) {
 module.exports = {
   CODE_MINUTES,
   MAX_ATTEMPTS,
+  initMail,
   mailIsConfigured,
   sendMail,
   startEmailVerification,

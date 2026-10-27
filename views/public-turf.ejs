@@ -5,6 +5,10 @@
   const hasTiming  = tenant.openingTime && tenant.closingTime;
   const hasContact = !!(tenant.phone || tenant.email);
 
+  /* Colour theme (replaces the blue shades) and preview mode (owner checking the site before it is live) */
+  const accent    = (locals.theme && locals.theme.colors) || null;
+  const isPreview = !!locals.preview;
+
   /* The logged-in customer of this turf website, or null */
   const currentCustomer = locals.customer || null;
   const customerJson    = JSON.stringify(currentCustomer).replace(/</g, '\\u003c');
@@ -25,46 +29,45 @@
   const icon = (key, cls = 'h-5 w-5') =>
     `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[key]}</svg>`;
 
-  /* Hero slideshow: use the local banner photos in public/img by default.
-     Tenant-uploaded photos still take priority when tenant.images is configured. */
-  const venuePhotos = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
+  /* Hero slideshow: the venue's own photos if it has any, otherwise 5 real turf photos from the web.
+     To use your own images instead, replace these URLs with e.g. '/images/turf/turf-1.jpg' */
+  const venuePhotos   = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
   const defaultPhotos = [
-    '/img/Turf1.jfif',
-    '/img/Turf2.jfif',
-    '/img/Turf3.jfif',
-    '/img/Turf4.jfif',
-    '/img/Turf5.jfif'
+    'https://loremflickr.com/1400/800/football,pitch?lock=11',
+    'https://loremflickr.com/1400/800/soccer,field?lock=12',
+    'https://loremflickr.com/1400/800/football,stadium?lock=13',
+    'https://loremflickr.com/1400/800/soccer,grass?lock=14',
+    'https://loremflickr.com/1400/800/football,goal?lock=15'
   ];
-  const photos = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 5);
+  const photos = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 6);
 
   /* Facilities */
   const defaultServices = [
-    { name: 'Parking',          description: 'Convenient parking available.' },
-    { name: 'Floodlights',      description: 'Evening and night play supported.' },
-    { name: 'Washroom',         description: 'Clean washroom facility.' },
-    { name: 'Drinking water',   description: 'Drinking water available.' },
-    { name: 'Changing room',    description: 'Change and keep your bags safe.' },
-    { name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
-    { name: 'First aid',        description: 'Basic first aid kit on site.' },
-    { name: 'Seating area',     description: 'Sit and watch the game.' }
+    { icon: '🚗', name: 'Parking',          description: 'Convenient parking available.' },
+    { icon: '💡', name: 'Floodlights',      description: 'Evening and night play supported.' },
+    { icon: '🚻', name: 'Washroom',         description: 'Clean washroom facility.' },
+    { icon: '💧', name: 'Drinking water',   description: 'Drinking water available.' },
+    { icon: '🧳', name: 'Changing room',    description: 'Change and keep your bags safe.' },
+    { icon: '⚽', name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
+    { icon: '🩹', name: 'First aid',        description: 'Basic first aid kit on site.' },
+    { icon: '🪑', name: 'Seating area',     description: 'Sit and watch the game.' }
   ];
   const services = Array.isArray(tenant.services) && tenant.services.length
     ? tenant.services
     : defaultServices;
 
   /* Facility photo: service.image if the venue set one, otherwise matched by name */
-  /* Stable, relevant Unsplash images for each facility type. Venue-provided service.image takes priority. */
   const facilityPhotos = [
-    [/park/i,                       'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?auto=format&fit=crop&w=640&q=80'],
-    [/flood|light/i,                'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=640&q=80'],
-    [/wash|toilet|rest ?room|bath/i,'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=640&q=80'],
-    [/water|drink/i,                'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?auto=format&fit=crop&w=640&q=80'],
-    [/chang|locker|room/i,          'https://images.unsplash.com/photo-1517649763962-0c623066013b?auto=format&fit=crop&w=640&q=80'],
-    [/equip|rent|ball|gear/i,       'https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=640&q=80'],
-    [/first|aid|medic/i,            'https://images.unsplash.com/photo-1603398938378-e54eab446dde?auto=format&fit=crop&w=640&q=80'],
-    [/seat|bench|stand|lounge/i,    'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=640&q=80'],
-    [/cafe|food|snack|canteen/i,    'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=640&q=80'],
-    [/wifi|wi-fi/i,                 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=640&q=80']
+    [/park/i,                       'https://loremflickr.com/640/480/parking,lot?lock=21'],
+    [/flood|light/i,                'https://loremflickr.com/640/480/floodlight,stadium?lock=22'],
+    [/wash|toilet|rest ?room|bath/i,'https://loremflickr.com/640/480/bathroom,interior?lock=23'],
+    [/water|drink/i,                'https://loremflickr.com/640/480/water,bottle?lock=24'],
+    [/chang|locker|room/i,          'https://loremflickr.com/640/480/locker,room?lock=25'],
+    [/equip|rent|ball|gear/i,       'https://loremflickr.com/640/480/sports,equipment?lock=26'],
+    [/first|aid|medic/i,            'https://loremflickr.com/640/480/first,aid,kit?lock=27'],
+    [/seat|bench|stand|lounge/i,    'https://loremflickr.com/640/480/stadium,seats?lock=28'],
+    [/cafe|food|snack|canteen/i,    'https://loremflickr.com/640/480/cafe,snacks?lock=29'],
+    [/wifi|wi-fi/i,                 'https://loremflickr.com/640/480/wifi,router?lock=30']
   ];
   const imageFor = (service) => {
     if (service.image) return service.image;
@@ -109,7 +112,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: { extend: { fontFamily: { sans: ['"Bricolage Grotesque"', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } }
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Bricolage Grotesque"', 'ui-sans-serif', 'system-ui', 'sans-serif'] }<% if (accent) { %>,
+          colors: { blue: <%- JSON.stringify(accent) %> }<% } %>
+        }
+      }
     };
   </script>
 
@@ -153,7 +161,8 @@
 
   <style>
     @keyframes spin { to { transform: rotate(360deg); } }
-    .loader { width: 18px; height: 18px; border: 2px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%; animation: spin .7s linear infinite; }
+    :root { --accent: <%= accent ? accent[600] : '#2563eb' %>; --accent-soft: <%= accent ? accent[100] : '#dbeafe' %>; }
+    .loader { width: 18px; height: 18px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
     @media (prefers-reduced-motion: reduce) { .loader { animation-duration: 2s; } }
 
     /* Green turf behind the photos: shows while photos load, or if none can be loaded */
@@ -175,6 +184,10 @@
 </head>
 
 <body class="bg-neutral-100 font-sans text-neutral-900 antialiased selection:bg-blue-600 selection:text-white">
+
+  <% if (isPreview) { %>
+    <p class="bg-neutral-900 px-4 py-2 text-center text-xs font-medium text-white">Preview: your website is not live yet</p>
+  <% } %>
 
   <!-- Navbar: on a phone it shows the logo, your name (or Log in) and Book now -->
   <header class="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
@@ -354,16 +367,11 @@
     <!-- Booking: time slots directly below the banner -->
     <section id="booking" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-10 lg:px-8">
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Select your slots</h2>
-      <p class="mt-2 text-neutral-600">Each slot is one hour. You can select more than one.</p>
+      <p class="mt-2 text-neutral-600">Each slot is one hour. You can select more than one.<% if (Array.isArray(tenant.operatingDays) && tenant.operatingDays.length && tenant.operatingDays.length < 7) { %> Open <%= tenant.operatingDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") %>.<% } %></p>
 
       <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200 sm:p-7">
-        <div class="flex items-center justify-between gap-3">
-          <label class="text-sm font-semibold" id="dateStripLabel">Choose a date</label>
-          <span class="text-xs text-neutral-500">Next 20 days</span>
-        </div>
-        <!-- Date chips, similar to cinema booking apps. The hidden date input keeps the existing booking logic intact. -->
-        <div id="dateStrip" class="mt-3 flex gap-2 overflow-x-auto pb-2" role="group" aria-labelledby="dateStripLabel"></div>
-        <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="hidden" tabindex="-1" aria-hidden="true">
+        <label for="bookingDate" class="text-sm font-semibold">Date</label>
+        <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="field mt-2 sm:max-w-xs">
 
         <ul class="mt-6 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
           <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
@@ -410,19 +418,19 @@
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Facilities</h2>
       <div class="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <% services.forEach(service => { %>
-          <article class="group relative isolate h-36 overflow-hidden rounded-2xl bg-neutral-800 sm:h-40">
+          <article class="group relative isolate h-44 overflow-hidden rounded-2xl bg-neutral-800 sm:h-52">
             <img src="<%= imageFor(service) %>" alt="" loading="lazy" decoding="async"
                  onerror="this.remove()"
                  class="absolute inset-0 -z-20 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none">
-            <!-- Stronger dark overlay on the text side for improved readability -->
-            <div class="absolute inset-0 -z-10 bg-gradient-to-r from-black/98 via-black/85 to-black/15"></div>
-            <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/35 via-transparent to-transparent"></div>
+            <!-- Dark fade so the text is always readable -->
+            <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/95 via-neutral-950/55 to-neutral-950/10"></div>
 
-            <div class="flex h-full items-end p-3.5 text-white sm:p-4">
-              <div class="max-w-[92%]">
-                <h3 class="text-sm font-extrabold leading-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] sm:text-base"><%= service.name %></h3>
+            <div class="flex h-full flex-col justify-between p-3.5 text-white sm:p-4">
+              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 text-lg backdrop-blur sm:h-10 sm:w-10 sm:text-xl" aria-hidden="true"><%= service.icon || '✓' %></span>
+              <div>
+                <h3 class="text-sm font-bold sm:text-base"><%= service.name %></h3>
                 <% if (service.description) { %>
-                  <p class="mt-1 text-xs font-medium leading-snug text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] sm:text-sm"><%= service.description %></p>
+                  <p class="mt-1 text-xs leading-snug text-neutral-200 sm:text-sm"><%= service.description %></p>
                 <% } %>
               </div>
             </div>
@@ -537,7 +545,7 @@
         <p class="text-xl font-extrabold tracking-tight">₹<span id="barPrice">0</span></p>
       </div>
       <button id="nextBtn" type="button"
-        style="background:#2563eb;color:#fff;"
+        style="background:var(--accent);color:#fff;"
         class="rounded-lg px-8 py-3 text-sm font-semibold">
         Next
       </button>
@@ -694,6 +702,11 @@
   </div>
 
   <script>
+    /* Set when the owner is previewing the site before publishing */
+    window.TURF_PREVIEW = <%- JSON.stringify(isPreview) %>;
+  </script>
+
+  <script>
     /* ================= Banner slideshow ================= */
     (() => {
       'use strict';
@@ -703,6 +716,7 @@
       const root     = document.getElementById('heroCarousel');
       const dotsBox  = root.querySelector('[data-dots]');
       const controls = [...root.querySelectorAll('[data-prev], [data-next]')];
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
       let slides  = [...root.querySelectorAll('[data-slide]')];
       let current = 0;
@@ -743,7 +757,7 @@
 
       function start() {
         stop();
-        if (slides.length < 2 || document.hidden) return;
+        if (slides.length < 2 || reduceMotion.matches || document.hidden) return;
         timer = setInterval(() => show(current + 1), SLIDE_INTERVAL);
       }
 
@@ -862,6 +876,8 @@
 
       /* All account requests go through here */
       async function api(path, { method = 'GET', body } = {}) {
+        if (window.TURF_PREVIEW) throw new Error('Log in is not available in the preview.');
+
         const response = await fetch(`${API}${path}`, {
           method,
           headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -1149,12 +1165,15 @@
       const SLUG  = <%- JSON.stringify(tenant.slug) %>;
       const PRICE = <%= price %>;
       const PAST_CHECK_MS = 30000; // re-check for slots whose time has gone
+      const PREVIEW = window.TURF_PREVIEW;
+      const OPENING = <%- JSON.stringify(tenant.openingTime || '06:00') %>;
+      const CLOSING = <%- JSON.stringify(tenant.closingTime || '23:00') %>;
+      const OPEN_DAYS = <%- JSON.stringify(tenant.operatingDays || []) %>;
 
       /* ---------- Elements ---------- */
       const $ = (id) => document.getElementById(id);
       const el = {
         date: $('bookingDate'),
-        dateStrip: $('dateStrip'),
         grid: $('slotGrid'),
         loading: $('slotLoading'),
         error: $('slotError'),
@@ -1204,52 +1223,6 @@
         const d = new Date();
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       };
-
-      /* Build the next 20 local dates as compact, horizontally scrollable date chips. */
-      function renderDateStrip() {
-        const start = new Date();
-        start.setHours(12, 0, 0, 0);
-        const todayValue = localToday();
-        const dates = Array.from({ length: 20 }, (_, index) => {
-          const date = new Date(start);
-          date.setDate(start.getDate() + index);
-          const value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-          return { date, value };
-        });
-
-        el.dateStrip.replaceChildren(...dates.map(({ date, value }, index) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.dataset.date = value;
-          button.className = 'date-chip flex min-w-[62px] shrink-0 flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600';
-          button.setAttribute('aria-pressed', String(value === el.date.value));
-          button.innerHTML = `<span class="text-[11px] font-semibold uppercase tracking-wide"></span><span class="mt-1 text-xl font-extrabold leading-none"></span><span class="mt-1 text-[11px]"></span>`;
-          const labels = button.querySelectorAll('span');
-          labels[0].textContent = index === 0 ? 'Today' : date.toLocaleDateString('en-IN', { weekday: 'short' });
-          labels[1].textContent = date.getDate();
-          labels[2].textContent = date.toLocaleDateString('en-IN', { month: 'short' });
-          button.addEventListener('click', () => {
-            if (el.date.value === value) return;
-            el.date.value = value;
-            updateDateChipState();
-            loadSlots();
-          });
-          return button;
-        }));
-        updateDateChipState();
-      }
-
-      function updateDateChipState() {
-        el.dateStrip.querySelectorAll('[data-date]').forEach((button) => {
-          const active = button.dataset.date === el.date.value;
-          button.className = `date-chip flex min-w-[62px] shrink-0 flex-col items-center rounded-xl border px-3 py-2.5 text-center transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${active ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-neutral-200 bg-white text-neutral-700 hover:border-blue-300 hover:bg-blue-50'}`;
-          button.setAttribute('aria-pressed', String(active));
-        });
-        const selected = el.dateStrip.querySelector(`[data-date="${el.date.value}"]`);
-        if (selected && typeof selected.scrollIntoView === 'function') {
-          selected.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-        }
-      }
 
       const toMinutes = (value) => {
         const [h, m] = value.split(':').map(Number);
@@ -1440,6 +1413,20 @@
         updateSummary();
       }
 
+      /* Preview only: every hour between opening and closing is free, and closed days have none */
+      function previewSlots(date) {
+        const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+        const [y, m, d] = date.split('-').map(Number);
+        if (OPEN_DAYS.length && !OPEN_DAYS.includes(dayKeys[new Date(y, m - 1, d).getDay()])) return [];
+
+        const slots = [];
+        for (let start = toMinutes(OPENING); start + 60 <= toMinutes(CLOSING); start += 60) {
+          const label = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+          slots.push({ startTime: label(start), endTime: label(start + 60), available: true });
+        }
+        return slots;
+      }
+
       async function loadSlots() {
         const date = el.date.value;
         if (!date) return;
@@ -1453,6 +1440,12 @@
         setLoading(true);
 
         try {
+          if (PREVIEW) {
+            allSlots = previewSlots(date);
+            renderSlots();
+            return;
+          }
+
           const response = await fetch(
             `/api/public/${encodeURIComponent(SLUG)}/availability?date=${encodeURIComponent(date)}`
           );
@@ -1501,6 +1494,13 @@
           }
         }
 
+        if (PREVIEW) {
+          el.successText.textContent = 'This is a preview, so no booking was made.';
+          el.formView.classList.add('hidden');
+          el.successView.classList.remove('hidden');
+          return;
+        }
+
         el.submit.disabled = true;
         el.submit.textContent = 'Sending request…';
         let failure = null;
@@ -1539,12 +1539,8 @@
       const today = localToday();       // use the visitor's own date, not the server's
       el.date.min = today;
       el.date.value = today;
-      renderDateStrip();
 
-      el.date.addEventListener('change', () => {
-        updateDateChipState();
-        loadSlots();
-      });
+      el.date.addEventListener('change', loadSlots);
       el.form.addEventListener('submit', submitBooking);
       el.next.addEventListener('click', openModal);
       el.modal.querySelectorAll('[data-close]').forEach((node) => node.addEventListener('click', closeModal));

@@ -8,6 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@vercel/blob": "^1.1.1",
     "bcryptjs": "^2.4.3",
     "connect-mongo": "^5.1.0",
     "dotenv": "^16.4.5",
