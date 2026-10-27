@@ -1,7 +1,4 @@
 const express = require('express');
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const multer = require('multer');
 
 const Tenant = require('../models/Tenant');
@@ -20,6 +17,7 @@ const {
 } = require('../utils/helpers');
 const { STEPS, STEP_PATHS, DAYS, ALL_DAYS, nextStepPath } = require('../utils/onboarding');
 const { THEMES, themeFor } = require('../utils/themes');
+const { saveImage, removeImage, EXTENSIONS: IMAGE_TYPES } = require('../utils/storage');
 const {
   CODE_MINUTES,
   MAX_ATTEMPTS,
@@ -35,10 +33,6 @@ const router = express.Router();
 const MAX_PHOTOS = 10; // gallery limit during sign-up (the Basic plan limit)
 const MAX_GROUNDS = 20;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
-const IMAGE_TYPES = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
-
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const UPLOAD_ROOT = path.join(PUBLIC_DIR, 'uploads');
 
 /* =========================================================
    HELPERS
@@ -74,19 +68,6 @@ function show(req, res, name, step, extra = {}) {
 function advanceTo(tenant, step) {
   tenant.onboarding.step = Math.max(tenant.onboarding.step, step);
 }
-
-/* Delete an uploaded file, but only ever inside this turf's own upload folder */
-function removeLocalFile(tenant, url) {
-  const folder = path.join(UPLOAD_ROOT, String(tenant._id));
-  const file = path.join(PUBLIC_DIR, String(url || ''));
-
-  if (!String(url || '').startsWith(`/uploads/${tenant._id}/`)) return;
-  if (!file.startsWith(folder + path.sep)) return;
-
-  fs.unlink(file, () => {});
-}
-
-const discardFiles = (files) => files.forEach((file) => fs.unlink(file.path, () => {}));
 
 /* =========================================================
    ACCESS RULES
@@ -384,16 +365,10 @@ router.post(
    STEP 4: WEBSITE (logo, photos, description, theme)
 ========================================================= */
 
+/* Files are held in memory while the form is checked, then saved with utils/storage.js
+   (Vercel Blob when live, the public/uploads folder on your computer). */
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => {
-      const folder = path.join(UPLOAD_ROOT, String(req.user.tenant._id));
-      fs.mkdirSync(folder, { recursive: true });
-      cb(null, folder);
-    },
-    filename: (req, file, cb) =>
-      cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${IMAGE_TYPES[file.mimetype]}`)
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_IMAGE_BYTES, files: MAX_PHOTOS + 1 },
   fileFilter: (req, file, cb) =>
     IMAGE_TYPES[file.mimetype] ? cb(null, true) : cb(new Error('Only JPG, PNG or WebP images are allowed.'))
@@ -446,17 +421,13 @@ router.post(
     const files = req.files || {};
     const newLogo = (files.logo || [])[0] || null;
     const newPhotos = files.photos || [];
-    const uploaded = [...(newLogo ? [newLogo] : []), ...newPhotos];
 
     const values = {
       description: String(req.body.description || '').trim(),
       theme: String(req.body.theme || '')
     };
 
-    const fail = (error) => {
-      discardFiles(uploaded);
-      return websiteView(req, res, { error, values });
-    };
+    const fail = (error) => websiteView(req, res, { error, values });
 
     if (req.uploadError) return fail(req.uploadError);
 
@@ -464,27 +435,46 @@ router.post(
     if (values.description.length > 1000) return fail('The description can be up to 1000 characters.');
     if (!THEMES[values.theme]) return fail('Please select a theme.');
 
-    const removed = new Set([].concat(req.body.removePhotos || []).map(String));
+    /* Only photos this turf really has can be removed */
+    const removed = new Set([].concat(req.body.removePhotos || []).map(String).filter((url) => tenant.images.includes(url)));
     const keptPhotos = tenant.images.filter((url) => !removed.has(url));
 
     if (keptPhotos.length + newPhotos.length > MAX_PHOTOS) {
       return fail(`You can have up to ${MAX_PHOTOS} photos. Remove some or upload fewer.`);
     }
 
-    /* Logo: a new file replaces the old one, or the owner can remove it */
-    const oldLogo = tenant.logoUrl;
-    if (newLogo) tenant.logoUrl = `/uploads/${tenant._id}/${newLogo.filename}`;
-    else if (req.body.removeLogo === '1') tenant.logoUrl = '';
+    /* Everything is valid: save the new images */
+    const savedUrls = [];
+    try {
+      const logoUrl = newLogo ? await saveImage(tenant._id, newLogo) : null;
+      if (logoUrl) savedUrls.push(logoUrl);
 
-    tenant.images = [...keptPhotos, ...newPhotos.map((file) => `/uploads/${tenant._id}/${file.filename}`)];
-    tenant.description = values.description;
-    tenant.theme = values.theme;
-    advanceTo(tenant, 5);
-    await tenant.save();
+      const photoUrls = [];
+      for (const file of newPhotos) {
+        const url = await saveImage(tenant._id, file);
+        savedUrls.push(url);
+        photoUrls.push(url);
+      }
 
-    /* Only after saving: remove the files that are no longer used */
-    if (oldLogo && oldLogo !== tenant.logoUrl) removeLocalFile(tenant, oldLogo);
-    removed.forEach((url) => removeLocalFile(tenant, url));
+      /* Logo: a new file replaces the old one, or the owner can remove it */
+      const oldLogo = tenant.logoUrl;
+      if (logoUrl) tenant.logoUrl = logoUrl;
+      else if (req.body.removeLogo === '1') tenant.logoUrl = '';
+
+      tenant.images = [...keptPhotos, ...photoUrls];
+      tenant.description = values.description;
+      tenant.theme = values.theme;
+      advanceTo(tenant, 5);
+      await tenant.save();
+
+      /* Only after saving: remove the files that are no longer used */
+      if (oldLogo && oldLogo !== tenant.logoUrl) await removeImage(tenant._id, oldLogo);
+      for (const url of removed) await removeImage(tenant._id, url);
+    } catch (error) {
+      console.error('Website step failed:', error.message);
+      for (const url of savedUrls) await removeImage(tenant._id, url); // do not leave unused files behind
+      return fail('Your images could not be saved. Please try again.');
+    }
 
     res.redirect(STEP_PATHS[5]);
   })
