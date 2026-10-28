@@ -701,7 +701,11 @@ app.post(
           pricePerHour: body.pricePerHour,
           openingTime: body.openingTime || tenant.openingTime,
           closingTime: body.closingTime || tenant.closingTime,
-          logoUrl: body.logoUrl || ''
+          logoUrl: body.logoUrl || '',
+          whatsapp: body.whatsapp || '',
+          instagram: body.instagram || '',
+          mapUrl: body.mapUrl || '',
+          refundPolicy: body.refundPolicy || ''
         },
         error,
         values: { services: body.services, images: body.images }
@@ -723,6 +727,24 @@ app.post(
       return fail('Closing time must be later than opening time.');
     }
 
+        /* Links are shown to customers, so only safe values are accepted */
+    const mapUrl = String(body.mapUrl || '').trim();
+    if (mapUrl && !/^https?:\/\/\S+$/i.test(mapUrl)) {
+      return fail('The map link must start with http:// or https://');
+    }
+
+    const instagram = String(body.instagram || '').trim();
+    if (instagram && !/^(https?:\/\/(www\.)?instagram\.com\/\S+|@?[A-Za-z0-9._]{1,30})$/i.test(instagram)) {
+      return fail('Instagram must be a username like @royalturf, or an instagram.com link.');
+    }
+
+    const whatsapp = String(body.whatsapp || '').replace(/\D/g, '');
+    if (whatsapp && (whatsapp.length < 10 || whatsapp.length > 15)) {
+      return fail('The WhatsApp number must have 10 to 15 digits.');
+    }
+
+    const refundPolicy = String(body.refundPolicy || '').trim().slice(0, 1500);  
+
     let services;
     try {
       services = parseServices(body.services);
@@ -742,7 +764,11 @@ app.post(
       closingTime,
       logoUrl: String(body.logoUrl || '').trim(),
       images: parseImages(body.images),
-      services
+      services,
+      whatsapp,
+      instagram,
+      mapUrl,
+      refundPolicy
     });
 
     await tenant.save();

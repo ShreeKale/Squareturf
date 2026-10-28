@@ -39,6 +39,12 @@ const tenantSchema = new mongoose.Schema({
   services: [serviceSchema],
   theme: { type: String, default: 'blue' },
 
+    /* Links and policy shown on the public website (all optional) */
+  whatsapp: { type: String, default: '' },
+  instagram: { type: String, default: '' },
+  mapUrl: { type: String, default: '' },
+  refundPolicy: { type: String, default: '', maxlength: 1500 },
+
   /* Plan and trial */
   subscriptionStatus: {
     type: String,

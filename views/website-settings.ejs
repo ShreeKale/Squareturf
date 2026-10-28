@@ -6,10 +6,10 @@
   const card = 'rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6';
 
   const defaultServices = [
-    { name: 'Parking', icon: '🚗', description: 'Convenient parking available.' },
-    { name: 'Washroom', icon: '🚻', description: 'Clean washroom facility.' },
-    { name: 'Drinking Water', icon: '💧', description: 'Drinking water available.' },
-    { name: 'Floodlights', icon: '💡', description: 'Evening and night play supported.' }
+    { name: 'Parking', description: 'Convenient parking available.' },
+    { name: 'Washroom', description: 'Clean washroom facility.' },
+    { name: 'Drinking Water', description: 'Drinking water available.' },
+    { name: 'Floodlights', description: 'Evening and night play supported.' }
   ];
   const servicesJson = (typeof values !== 'undefined' && values && values.services !== undefined)
     ? values.services
@@ -78,6 +78,27 @@
     </section>
 
     <section class="<%= card %>">
+      <h2 class="text-lg font-bold text-neutral-900">Links &amp; policy</h2>
+      <p class="mt-1 text-sm text-neutral-500">These show in the footer of your website. Leave a box empty to hide that link.</p>
+      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <label class="<%= labelCls %>">WhatsApp number
+          <input name="whatsapp" type="tel" inputmode="numeric" value="<%= tenant.whatsapp || '' %>" placeholder="98765 43210" class="<%= inputCls %>">
+          <span class="mt-1 block text-xs font-normal text-neutral-500">If empty, your contact phone is used.</span>
+        </label>
+        <label class="<%= labelCls %>">Instagram
+          <input name="instagram" value="<%= tenant.instagram || '' %>" placeholder="@royalturf or the profile link" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %> sm:col-span-2">Google Maps link
+          <input name="mapUrl" value="<%= tenant.mapUrl || '' %>" placeholder="https://maps.app.goo.gl/..." class="<%= inputCls %>">
+          <span class="mt-1 block text-xs font-normal text-neutral-500">In Google Maps, open your turf, tap Share and copy the link. If empty, your address is used.</span>
+        </label>
+        <label class="<%= labelCls %> sm:col-span-2">Cancellation and refund policy
+          <textarea name="refundPolicy" rows="6" maxlength="1500" placeholder="One rule per line. If empty, a standard policy is shown." class="<%= inputCls %>"><%= tenant.refundPolicy || '' %></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="<%= card %>">
       <h2 class="text-lg font-bold text-neutral-900">Photos</h2>
       <p class="mt-1 text-sm text-neutral-500">One image URL per line, up to 10. The first image is shown first in the banner. Image upload comes in a later step.</p>
       <textarea name="images" rows="6" placeholder="https://..." class="<%= inputCls %>"><%= imagesText %></textarea>
@@ -88,7 +109,7 @@
 
     <section class="<%= card %>">
       <h2 class="text-lg font-bold text-neutral-900">Facilities &amp; services</h2>
-      <p class="mt-1 text-sm text-neutral-500">Edit the list below. Each item needs a name, and can have an icon and a description. A simple form for this comes later.</p>
+      <p class="mt-1 text-sm text-neutral-500">Edit the list below. Each item needs a name, and can have a description. A simple form for this comes later.</p>
       <textarea name="services" rows="10" class="<%= inputCls %> font-mono"><%= servicesJson %></textarea>
     </section>
 

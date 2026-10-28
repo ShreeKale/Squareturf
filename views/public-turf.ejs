@@ -4,17 +4,17 @@
   const price      = Number(tenant.pricePerHour) || 0;
   const hasTiming  = tenant.openingTime && tenant.closingTime;
   const hasContact = !!(tenant.phone || tenant.email);
-
+ 
   /* Colour theme (replaces the blue shades) and preview mode (owner checking the site before it is live) */
   const accent    = (locals.theme && locals.theme.colors) || null;
   const isPreview = !!locals.preview;
-
+ 
   /* The logged-in customer of this turf website, or null */
   const currentCustomer = locals.customer || null;
   const customerJson    = JSON.stringify(currentCustomer).replace(/</g, '\\u003c');
   const firstName = (value) => String(value || '').trim().split(/\s+/)[0];
   const initialOf = (value) => String(value || '?').trim().charAt(0).toUpperCase();
-
+ 
   /* Small icons for the user card (24x24, stroke style) */
   const icons = {
     chevron:  '<path d="m6 9 6 6 6-6"/>',
@@ -28,7 +28,7 @@
   };
   const icon = (key, cls = 'h-5 w-5') =>
     `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[key]}</svg>`;
-
+ 
   /* Hero slideshow: the venue's own photos if it has any, otherwise 5 real turf photos from the web.
      To use your own images instead, replace these URLs with e.g. '/images/turf/turf-1.jpg' */
   const venuePhotos   = Array.isArray(tenant.images) ? tenant.images.filter(Boolean) : [];
@@ -40,22 +40,22 @@
     'https://loremflickr.com/1400/800/football,goal?lock=15'
   ];
   const photos = (venuePhotos.length ? venuePhotos : defaultPhotos).slice(0, 6);
-
+ 
   /* Facilities */
   const defaultServices = [
-    { icon: '🚗', name: 'Parking',          description: 'Convenient parking available.' },
-    { icon: '💡', name: 'Floodlights',      description: 'Evening and night play supported.' },
-    { icon: '🚻', name: 'Washroom',         description: 'Clean washroom facility.' },
-    { icon: '💧', name: 'Drinking water',   description: 'Drinking water available.' },
-    { icon: '🧳', name: 'Changing room',    description: 'Change and keep your bags safe.' },
-    { icon: '⚽', name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
-    { icon: '🩹', name: 'First aid',        description: 'Basic first aid kit on site.' },
-    { icon: '🪑', name: 'Seating area',     description: 'Sit and watch the game.' }
+    { name: 'Parking',          description: 'Convenient parking available.' },
+    { name: 'Floodlights',      description: 'Evening and night play supported.' },
+    { name: 'Washroom',         description: 'Clean washroom facility.' },
+    { name: 'Drinking water',   description: 'Drinking water available.' },
+    { name: 'Changing room',    description: 'Change and keep your bags safe.' },
+    { name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
+    { name: 'First aid',        description: 'Basic first aid kit on site.' },
+    { name: 'Seating area',     description: 'Sit and watch the game.' }
   ];
   const services = Array.isArray(tenant.services) && tenant.services.length
     ? tenant.services
     : defaultServices;
-
+ 
   /* Facility photo: service.image if the venue set one, otherwise matched by name */
   const facilityPhotos = [
     [/park/i,                       'https://loremflickr.com/640/480/parking,lot?lock=21'],
@@ -74,7 +74,7 @@
     const hit = facilityPhotos.find(([pattern]) => pattern.test(service.name || ''));
     return hit ? hit[1] : 'https://loremflickr.com/640/480/football,turf?lock=31';
   };
-
+ 
   /* Social + location links (shown only when the venue has the data) */
   const waDigits = String(tenant.whatsapp || tenant.phone || '').replace(/\D/g, '');
   const waNumber = waDigits.length === 10 ? '91' + waDigits : waDigits;
@@ -83,14 +83,26 @@
     : '';
   const igRaw    = String(tenant.instagram || '').trim();
   const igUrl    = igRaw
-    ? (/^https?:\/\//i.test(igRaw) ? igRaw : `https://www.instagram.com/${igRaw.replace(/^@/, '')}`)
+    ? (/^https:\/\/(www\.)?instagram\.com\//i.test(igRaw) ? igRaw : `https://www.instagram.com/${igRaw.replace(/^@/, '').replace(/[^A-Za-z0-9._]/g, '')}`)
     : '';
-  const mapUrl   = tenant.mapUrl ||
+  const ownMapUrl = /^https?:\/\//i.test(String(tenant.mapUrl || '')) ? tenant.mapUrl : '';
+  const mapUrl   = ownMapUrl ||
     (tenant.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + tenant.address)}` : '');
   const mapEmbed = tenant.address
     ? `https://maps.google.com/maps?q=${encodeURIComponent(name + ' ' + tenant.address)}&z=15&output=embed`
     : '';
-
+ 
+  /* Refund policy: the owner's own text (one rule per line), or a standard one */
+  const defaultRefund = [
+    'Cancel 24 hours or more before your slot: full refund.',
+    'Cancel between 6 and 24 hours before: 50% refund.',
+    'Cancel less than 6 hours before, or not turning up: no refund.',
+    'If the turf cancels your booking, you get a full refund or a free change of slot.',
+    'To cancel or change a booking, call or message the turf with your name and booking date.'
+  ];
+  const ownRefund = String(tenant.refundPolicy || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const refundLines = ownRefund.length ? ownRefund : defaultRefund;
+ 
   const now = new Date();
   const today = [
     now.getFullYear(),
@@ -104,11 +116,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= name %> | SquareTurf</title>
-
+ 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet">
-
+ 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -120,7 +132,7 @@
       }
     };
   </script>
-
+ 
   <style type="text/tailwindcss">
     @layer components {
       /* Time slot button and its three states */
@@ -128,50 +140,55 @@
       .slot-status     { @apply text-[10px] font-semibold uppercase tracking-wide sm:text-[11px]; }
       .slot-time       { @apply mt-1 text-[13px] font-bold leading-tight sm:text-sm; }
       .slot-end        { @apply mt-0.5 text-[11px] font-medium leading-tight opacity-75 sm:text-xs; }
-
+ 
       .slot--available { @apply border-neutral-300 bg-white hover:border-blue-600 hover:bg-blue-50; }
       .slot--available .slot-status { @apply text-blue-700; }
-
+ 
       .slot--selected  { @apply border-blue-600 bg-blue-600 text-white shadow-md; }
       .slot--selected .slot-status  { @apply text-blue-100; }
-
+ 
       .slot--booked    { @apply cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400; }
       .slot--booked .slot-status    { @apply text-neutral-400; }
-
+ 
       /* Form fields and buttons */
       .field    { @apply w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100; }
       .btn-dark { @apply w-full rounded-lg bg-neutral-900 px-4 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500; }
-
+ 
       /* Log in / Register switch */
       .tab         { @apply flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600; }
       .tab--active { @apply bg-white text-neutral-900 shadow-sm; }
-
+ 
       /* Rows inside the user card */
       .menu-item { @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600; }
-
+ 
       /* Banner carousel */
       .dot         { @apply h-2 w-2 rounded-full bg-white/50 transition-all hover:bg-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white; }
       .dot--active { @apply w-6 bg-white; }
       .arrow       { @apply hidden h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur transition-colors hover:bg-white/35 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white sm:flex; }
-
+ 
+      /* Date strip (like a cinema booking page) */
+      .day         { @apply flex min-w-[4.25rem] shrink-0 snap-start flex-col items-center rounded-xl border border-neutral-300 bg-white px-2 py-2.5 text-center transition-colors hover:border-blue-600 sm:min-w-[4.75rem] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
+      .day--active { @apply border-blue-600 bg-blue-600 text-white shadow-md hover:border-blue-600; }
+      .day--off    { @apply cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 hover:border-neutral-200; }
+ 
       /* Round social / location icon buttons in the footer */
       .social { @apply flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
     }
   </style>
-
+ 
   <style>
     @keyframes spin { to { transform: rotate(360deg); } }
     :root { --accent: <%= accent ? accent[600] : '#2563eb' %>; --accent-soft: <%= accent ? accent[100] : '#dbeafe' %>; }
     .loader { width: 18px; height: 18px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
     @media (prefers-reduced-motion: reduce) { .loader { animation-duration: 2s; } }
-
+ 
     /* Green turf behind the photos: shows while photos load, or if none can be loaded */
     .turf-bg {
       background:
         radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.25) 100%),
         repeating-linear-gradient(90deg, #2e8b4a 0 80px, #3aa25b 80px 160px);
     }
-
+ 
     /* Bottom bar with the Next button (plain CSS so it always works) */
     .selection-bar {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
@@ -180,19 +197,23 @@
       box-shadow: 0 -4px 16px rgba(0,0,0,.08);
     }
     .selection-bar[hidden] { display: none; }
+ 
+    /* Date strip scrolls sideways without a visible scrollbar */
+    .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
   </style>
 </head>
-
+ 
 <body class="bg-neutral-100 font-sans text-neutral-900 antialiased selection:bg-blue-600 selection:text-white">
-
+ 
   <% if (isPreview) { %>
     <p class="bg-neutral-900 px-4 py-2 text-center text-xs font-medium text-white">Preview: your website is not live yet</p>
   <% } %>
-
+ 
   <!-- Navbar: on a phone it shows the logo, your name (or Log in) and Book now -->
   <header class="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
     <nav class="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 sm:px-5 lg:px-8" aria-label="Main">
-
+ 
       <a href="#top" class="flex min-w-0 items-center gap-3">
         <% if (tenant.logoUrl) { %>
           <img src="<%= tenant.logoUrl %>" alt="" class="h-10 w-10 shrink-0 rounded-lg object-cover">
@@ -206,7 +227,7 @@
           <span class="hidden text-xs text-neutral-500 sm:block">Powered by SquareTurf</span>
         </span>
       </a>
-
+ 
       <div class="flex shrink-0 items-center gap-1 text-sm font-medium sm:gap-1.5">
         <a href="#facilities" class="hidden rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:block">Facilities</a>
         <% if (mapUrl) { %>
@@ -215,13 +236,13 @@
         <% if (hasContact) { %>
           <a href="#contact" class="hidden rounded-lg px-3 py-2 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 md:block">Contact</a>
         <% } %>
-
+ 
         <!-- Shown when nobody is logged in -->
         <button id="loginBtn" type="button" data-auth-open="login"
           class="rounded-lg px-3 py-2 font-semibold text-neutral-800 hover:bg-neutral-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 <%= currentCustomer ? 'hidden' : '' %>">
           Log in
         </button>
-
+ 
         <!-- Shown after login: the customer's name opens the user card -->
         <div id="userMenu" class="relative <%= currentCustomer ? '' : 'hidden' %>">
           <button id="userBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userCard"
@@ -231,11 +252,11 @@
             <span id="userFullName" class="hidden max-w-[10rem] truncate sm:inline"><%= currentCustomer ? currentCustomer.name : '' %></span>
             <%- icon('chevron', 'h-4 w-4 shrink-0 text-neutral-500') %>
           </button>
-
+ 
           <!-- User card -->
           <div id="userCard" role="menu" aria-label="Your account"
             class="fixed inset-x-3 top-[4.25rem] z-50 hidden rounded-2xl bg-white p-2 shadow-xl ring-1 ring-neutral-200 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80">
-
+ 
             <div class="flex items-center gap-3 p-3">
               <span id="cardInitial" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-base font-bold text-white"></span>
               <div class="min-w-0">
@@ -244,9 +265,9 @@
                 <p id="cardEmail" class="truncate text-xs text-neutral-500"></p>
               </div>
             </div>
-
+ 
             <div class="my-1 border-t border-neutral-200"></div>
-
+ 
             <ul class="py-1">
               <li>
                 <button type="button" id="historyOpen" role="menuitem" class="menu-item">
@@ -279,7 +300,7 @@
                 </li>
               <% } %>
             </ul>
-
+ 
             <div class="border-t border-neutral-200 pt-1">
               <button type="button" id="logoutBtn" role="menuitem" class="menu-item text-red-700 hover:bg-red-50 hover:text-red-800">
                 <span><%- icon('logout') %></span>Log out
@@ -287,7 +308,7 @@
             </div>
           </div>
         </div>
-
+ 
         <a href="#booking"
           class="rounded-lg bg-blue-600 px-3 py-2 font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:px-4">
           Book now
@@ -295,14 +316,14 @@
       </div>
     </nav>
   </header>
-
+ 
   <main id="top">
-
+ 
     <!-- Hero: photo slideshow -->
     <section class="mx-auto max-w-6xl px-5 pt-6 lg:px-8 lg:pt-8">
       <div id="heroCarousel" class="relative isolate overflow-hidden rounded-3xl bg-neutral-800"
            role="region" aria-roledescription="carousel" aria-label="<%= name %> photos">
-
+ 
         <!-- Turf pattern (always behind the photos) -->
         <div class="turf-bg absolute inset-0 -z-20" aria-hidden="true"></div>
         <svg class="absolute inset-0 -z-20 h-full w-full" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice"
@@ -313,7 +334,7 @@
           <rect x="40" y="150" width="110" height="200"/>
           <rect x="650" y="150" width="110" height="200"/>
         </svg>
-
+ 
         <!-- Photos -->
         <div class="absolute inset-0 -z-10">
           <% photos.forEach((photo, i) => { %>
@@ -325,13 +346,13 @@
                  class="absolute inset-0 h-full w-full object-cover transition-opacity duration-700 motion-reduce:transition-none <%= i === 0 ? 'opacity-100' : 'opacity-0' %>">
           <% }) %>
         </div>
-
+ 
         <!-- Shade so the text stays readable on any photo -->
         <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/85 via-neutral-950/35 to-neutral-950/10"></div>
-
+ 
         <!-- Slide dots (created by the script) -->
         <div data-dots class="absolute right-5 top-5 flex items-center gap-2" role="group" aria-label="Choose photo"></div>
-
+ 
         <!-- Prev / next -->
         <button type="button" data-prev aria-label="Previous photo" class="arrow absolute left-4 top-1/2 -translate-y-1/2">
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -339,7 +360,7 @@
         <button type="button" data-next aria-label="Next photo" class="arrow absolute right-4 top-1/2 -translate-y-1/2">
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
-
+ 
         <div class="flex min-h-[320px] flex-col justify-end p-6 text-white sm:p-8 lg:min-h-[380px]">
           <p class="text-sm font-medium text-blue-200"><%= tenant.sport || 'Sports turf' %></p>
           <h1 class="mt-2 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl"><%= name %></h1>
@@ -349,7 +370,7 @@
               <span><%= tenant.address %></span>
             </p>
           <% } %>
-
+ 
           <div class="mt-5 flex flex-wrap items-center gap-3">
             <span class="rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur">
               ₹<%= price.toLocaleString('en-IN') %> <span class="font-normal text-neutral-200">/ hour</span>
@@ -363,36 +384,53 @@
         </div>
       </div>
     </section>
-
+ 
     <!-- Booking: time slots directly below the banner -->
     <section id="booking" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-10 lg:px-8">
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Select your slots</h2>
-      <p class="mt-2 text-neutral-600">Each slot is one hour. You can select more than one.<% if (Array.isArray(tenant.operatingDays) && tenant.operatingDays.length && tenant.operatingDays.length < 7) { %> Open <%= tenant.operatingDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") %>.<% } %></p>
-
+      <p class="mt-2 text-neutral-600">Pick a day, then pick your hourly slots. You can select more than one.<% if (Array.isArray(tenant.operatingDays) && tenant.operatingDays.length && tenant.operatingDays.length < 7) { %> Open <%= tenant.operatingDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ") %>.<% } %></p>
+ 
       <div class="mt-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-neutral-200 sm:p-7">
-        <label for="bookingDate" class="text-sm font-semibold">Date</label>
-        <input id="bookingDate" type="date" min="<%= today %>" value="<%= today %>" class="field mt-2 sm:max-w-xs">
-
-        <ul class="mt-6 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
+        <div class="flex items-baseline justify-between gap-3">
+          <h3 id="dateHeading" class="text-sm font-semibold">Choose a date</h3>
+          <p id="dateLabel" class="text-sm text-neutral-500" aria-live="polite"></p>
+        </div>
+ 
+        <!-- Next 21 days: today and the 20 days after. The chosen date is kept in the hidden field. -->
+        <input id="bookingDate" type="hidden" value="<%= today %>">
+        <div class="relative mt-3">
+          <button type="button" id="dayPrev" aria-label="Earlier dates"
+            class="absolute -left-3 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-700 shadow ring-1 ring-neutral-200 hover:bg-neutral-50 md:flex">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div id="dateStrip" role="group" aria-labelledby="dateHeading"
+               class="no-scrollbar flex snap-x gap-2 overflow-x-auto scroll-smooth py-1 md:px-1"></div>
+          <button type="button" id="dayNext" aria-label="Later dates"
+            class="absolute -right-3 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-700 shadow ring-1 ring-neutral-200 hover:bg-neutral-50 md:flex">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+ 
+        <ul class="mt-5 flex flex-wrap gap-5 text-sm text-neutral-600" aria-label="Legend">
           <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full border border-neutral-300 bg-white"></span>Available</li>
           <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-neutral-300"></span>Booked</li>
           <li class="flex items-center gap-2"><span class="h-3 w-3 rounded-full bg-blue-600"></span>Selected</li>
         </ul>
-
+ 
         <div id="slotLoading" class="mt-7 hidden items-center gap-3 text-sm text-neutral-500" role="status">
           <span class="loader"></span>Checking availability…
         </div>
         <div id="slotError" class="mt-7 hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></div>
-
+ 
         <div id="slotGrid" class="mt-7 grid grid-cols-3 gap-2 sm:gap-3 md:grid-cols-4 lg:grid-cols-6"></div>
-
+ 
         <div id="slotEmpty" class="mt-7 hidden rounded-xl border border-dashed border-neutral-300 p-8 text-center">
           <p class="font-semibold">No slots available</p>
           <p class="mt-1 text-sm text-neutral-500">There are no bookable slots on this date. Try another day.</p>
         </div>
       </div>
     </section>
-
+ 
     <!-- How it works -->
     <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">How booking works</h2>
@@ -412,7 +450,7 @@
         <% }) %>
       </ol>
     </section>
-
+ 
     <!-- Facilities -->
     <section id="facilities" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
       <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Facilities</h2>
@@ -424,9 +462,8 @@
                  class="absolute inset-0 -z-20 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 motion-reduce:transition-none">
             <!-- Dark fade so the text is always readable -->
             <div class="absolute inset-0 -z-10 bg-gradient-to-t from-neutral-950/95 via-neutral-950/55 to-neutral-950/10"></div>
-
-            <div class="flex h-full flex-col justify-between p-3.5 text-white sm:p-4">
-              <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 text-lg backdrop-blur sm:h-10 sm:w-10 sm:text-xl" aria-hidden="true"><%= service.icon || '✓' %></span>
+ 
+            <div class="flex h-full flex-col justify-end p-3.5 text-white sm:p-4">
               <div>
                 <h3 class="text-sm font-bold sm:text-base"><%= service.name %></h3>
                 <% if (service.description) { %>
@@ -438,9 +475,9 @@
         <% }) %>
       </div>
     </section>
-
+ 
     <!-- About -->
-    <section class="mx-auto max-w-6xl px-5 pt-14 lg:px-8">
+    <section id="about" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
       <div class="max-w-3xl">
         <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">About the venue</h2>
         <p class="mt-4 text-lg leading-relaxed text-neutral-600">
@@ -448,7 +485,7 @@
         </p>
       </div>
     </section>
-
+ 
     <!-- Location -->
     <% if (mapUrl) { %>
       <section id="location" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
@@ -474,7 +511,7 @@
         </div>
       </section>
     <% } %>
-
+ 
     <!-- Contact -->
     <% if (hasContact) { %>
       <section id="contact" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
@@ -497,38 +534,71 @@
         </div>
       </section>
     <% } %>
-
+ 
+    <!-- Refund policy -->
+    <section id="refund-policy" class="mx-auto max-w-6xl scroll-mt-20 px-5 pt-14 lg:px-8">
+      <div class="rounded-2xl bg-white p-6 ring-1 ring-neutral-200 sm:p-7">
+        <h2 class="text-2xl font-extrabold tracking-tight sm:text-3xl">Cancellation and refund policy</h2>
+        <ul class="mt-4 space-y-2.5 text-sm text-neutral-700 sm:text-base">
+          <% refundLines.forEach((line) => { %>
+            <li class="flex items-start gap-3">
+              <svg class="mt-1 h-4 w-4 shrink-0 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
+              <span class="min-w-0 break-words"><%= line %></span>
+            </li>
+          <% }) %>
+        </ul>
+      </div>
+    </section>
+ 
     <div class="h-28"></div>
   </main>
-
-  <!-- Footer with social + location icons -->
+ 
+  <!-- Footer: links, social icons, policy -->
   <footer class="border-t border-neutral-200 bg-white">
-    <div class="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-8 lg:px-8">
-      <% if (igUrl || waUrl || mapUrl) { %>
-        <div class="flex items-center gap-3">
-          <% if (igUrl) { %>
+    <div class="mx-auto max-w-6xl px-5 py-8 lg:px-8">
+      <div class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+        <div class="min-w-0">
+          <p class="truncate text-lg font-bold"><%= name %></p>
+          <% if (tenant.address) { %><p class="mt-1 max-w-sm text-sm text-neutral-600"><%= tenant.address %></p><% } %>
+          <% if (tenant.phone) { %><p class="mt-1 text-sm text-neutral-600"><a href="tel:<%= tenant.phone %>" class="hover:underline"><%= tenant.phone %></a></p><% } %>
+        </div>
+ 
+        <nav aria-label="Footer" class="grid grid-cols-2 gap-x-10 gap-y-2 text-sm font-medium text-neutral-700">
+          <a href="#booking" class="hover:text-blue-700">Book a slot</a>
+          <a href="#facilities" class="hover:text-blue-700">Facilities</a>
+          <a href="#about" class="hover:text-blue-700">About</a>
+          <% if (mapUrl) { %><a href="#location" class="hover:text-blue-700">Location</a><% } %>
+          <% if (hasContact) { %><a href="#contact" class="hover:text-blue-700">Contact</a><% } %>
+          <a href="#refund-policy" class="hover:text-blue-700">Refund policy</a>
+        </nav>
+ 
+        <% if (igUrl || waUrl || mapUrl) { %>
+          <div class="flex items-center gap-3">
+            <% if (igUrl) { %>
             <a href="<%= igUrl %>" target="_blank" rel="noopener" aria-label="Instagram" class="social hover:bg-pink-600">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>
             </a>
-          <% } %>
-          <% if (waUrl) { %>
+            <% } %>
+            <% if (waUrl) { %>
             <a href="<%= waUrl %>" target="_blank" rel="noopener" aria-label="WhatsApp" class="social hover:bg-green-600">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
             </a>
-          <% } %>
-          <% if (mapUrl) { %>
+            <% } %>
+            <% if (mapUrl) { %>
             <a href="<%= mapUrl %>" target="_blank" rel="noopener" aria-label="Location on map" class="social hover:bg-blue-600">
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11a7 7 0 1 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
             </a>
-          <% } %>
-        </div>
-      <% } %>
-      <p class="text-center text-xs text-neutral-500">
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+ 
+      <p class="mt-8 border-t border-neutral-200 pt-5 text-center text-xs text-neutral-500">
         &copy; <%= new Date().getFullYear() %> <%= name %> &middot; Powered by SquareTurf
       </p>
     </div>
   </footer>
-
+ 
   <!-- Floating WhatsApp chat button -->
   <% if (waUrl) { %>
     <a href="<%= waUrl %>" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"
@@ -536,7 +606,7 @@
       <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
     </a>
   <% } %>
-
+ 
   <!-- Selection bar: appears once slots are selected -->
   <div id="selectionBar" class="selection-bar" hidden>
     <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 lg:px-8">
@@ -551,15 +621,15 @@
       </button>
     </div>
   </div>
-
+ 
   <!-- Booking popup -->
   <div id="bookingModal" data-modal class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="bookingTitle">
     <div data-close class="absolute inset-0 bg-neutral-950/60"></div>
-
+ 
     <div id="modalPanel" tabindex="-1"
          class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
-
+ 
       <!-- Form view -->
       <div id="formView">
         <div class="flex items-center justify-between">
@@ -569,21 +639,21 @@
             <%- icon('close') %>
           </button>
         </div>
-
+ 
         <dl class="mt-5 space-y-3 text-sm">
           <div class="flex justify-between gap-4"><dt class="text-neutral-500">Turf</dt><dd class="text-right font-medium"><%= name %></dd></div>
           <div class="flex justify-between gap-4"><dt class="text-neutral-500">Date</dt><dd id="summaryDate" class="text-right font-medium">Select a date</dd></div>
           <div class="flex justify-between gap-4"><dt class="text-neutral-500">Slots</dt><dd id="summaryTime" class="text-right font-medium">No slots selected</dd></div>
           <div class="flex justify-between gap-4"><dt class="text-neutral-500">Duration</dt><dd id="summaryDuration" class="text-right font-medium">0 hours</dd></div>
         </dl>
-
+ 
         <div class="my-5 flex items-baseline justify-between border-t border-neutral-200 pt-5">
           <span class="text-sm text-neutral-500">Total</span>
           <span class="text-3xl font-extrabold tracking-tight">₹<span id="summaryPrice">0</span></span>
         </div>
-
+ 
         <form id="bookingForm" class="space-y-3" novalidate>
-
+ 
           <!-- Logged in: details are already saved, so nothing to type -->
           <div id="memberBox" class="hidden items-center gap-3 rounded-xl bg-neutral-50 p-3 ring-1 ring-inset ring-neutral-200">
             <span id="memberInitial" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 font-bold text-white"></span>
@@ -593,7 +663,7 @@
               <p id="memberContact" class="truncate text-sm text-neutral-600"></p>
             </div>
           </div>
-
+ 
           <!-- Not logged in: ask for details -->
           <div id="guestFields" class="space-y-3">
             <p class="text-sm text-neutral-600">
@@ -605,15 +675,15 @@
             <input id="customerPhone" type="tel"   required maxlength="20"  autocomplete="tel"  placeholder="Phone number" class="field">
             <input id="customerEmail" type="email" autocomplete="email" placeholder="Email (optional)" class="field">
           </div>
-
+ 
           <div id="bookingMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
-
+ 
           <button id="bookingSubmit" type="submit" class="btn-dark">Request booking</button>
         </form>
-
+ 
         <p class="mt-4 text-center text-xs leading-5 text-neutral-500">The turf owner will confirm your request.</p>
       </div>
-
+ 
       <!-- Success view -->
       <div id="successView" class="hidden py-4 text-center">
         <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-100 text-green-700">
@@ -625,15 +695,15 @@
       </div>
     </div>
   </div>
-
+ 
   <!-- Log in / Register popup -->
   <div id="authModal" data-modal class="fixed inset-0 z-[60] hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
     <div data-auth-close class="absolute inset-0 bg-neutral-950/60"></div>
-
+ 
     <div id="authPanel" tabindex="-1"
          class="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:p-6"
          style="padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));">
-
+ 
       <div class="flex items-start justify-between gap-4">
         <div>
           <h3 id="authTitle" class="text-xl font-bold">Welcome back</h3>
@@ -644,19 +714,19 @@
           <%- icon('close') %>
         </button>
       </div>
-
+ 
       <div class="mt-5 flex rounded-xl bg-neutral-100 p-1" role="tablist" aria-label="Log in or register">
         <button type="button" role="tab" data-auth-tab="login"    aria-selected="true"  class="tab tab--active">Log in</button>
         <button type="button" role="tab" data-auth-tab="register" aria-selected="false" class="tab">New here? Register</button>
       </div>
-
+ 
       <!-- Returning customers: phone number only -->
       <form id="loginForm" class="mt-5 space-y-3" novalidate>
         <input id="loginPhone" type="tel" inputmode="numeric" maxlength="20" autocomplete="tel" aria-label="Phone number" placeholder="Phone number" class="field">
         <div id="loginMessage" class="hidden rounded-lg px-4 py-3 text-sm" role="status" aria-live="polite"></div>
         <button id="loginSubmit" type="submit" class="btn-dark">Log in</button>
       </form>
-
+ 
       <!-- New customers: name, phone and email -->
       <form id="registerForm" class="mt-5 hidden space-y-3" novalidate>
         <input id="registerName"  type="text"  maxlength="100" autocomplete="name"  aria-label="Your name"    placeholder="Your name" class="field">
@@ -667,14 +737,14 @@
       </form>
     </div>
   </div>
-
+ 
   <!-- Booking history popup -->
   <div id="historyModal" data-modal class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
     <div data-history-close class="absolute inset-0 bg-neutral-950/60"></div>
-
+ 
     <div id="historyPanel" tabindex="-1"
          class="absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col rounded-t-3xl bg-white shadow-xl outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl">
-
+ 
       <div class="flex items-start justify-between gap-4 border-b border-neutral-200 p-5 sm:px-6">
         <div>
           <h3 id="historyTitle" class="text-xl font-bold">My bookings</h3>
@@ -685,7 +755,7 @@
           <%- icon('close') %>
         </button>
       </div>
-
+ 
       <div class="overflow-y-auto p-4 sm:p-5" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));">
         <div id="historyLoading" class="hidden items-center gap-3 py-8 text-sm text-neutral-500" role="status">
           <span class="loader"></span>Loading your bookings…
@@ -700,45 +770,45 @@
       </div>
     </div>
   </div>
-
+ 
   <script>
     /* Set when the owner is previewing the site before publishing */
     window.TURF_PREVIEW = <%- JSON.stringify(isPreview) %>;
   </script>
-
+ 
   <script>
     /* ================= Banner slideshow ================= */
     (() => {
       'use strict';
-
+ 
       const SLIDE_INTERVAL = 2000; // 2 seconds
-
+ 
       const root     = document.getElementById('heroCarousel');
       const dotsBox  = root.querySelector('[data-dots]');
       const controls = [...root.querySelectorAll('[data-prev], [data-next]')];
       const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-
+ 
       let slides  = [...root.querySelectorAll('[data-slide]')];
       let current = 0;
       let timer   = null;
-
+ 
       function show(index) {
         if (!slides.length) return;
         current = (index + slides.length) % slides.length;
-
+ 
         slides.forEach((slide, i) => {
           const active = i === current;
           slide.classList.toggle('opacity-100', active);
           slide.classList.toggle('opacity-0', !active);
           slide.setAttribute('aria-hidden', String(!active));
         });
-
+ 
         [...dotsBox.children].forEach((dot, i) => {
           dot.classList.toggle('dot--active', i === current);
           dot.setAttribute('aria-current', String(i === current));
         });
       }
-
+ 
       function buildDots() {
         dotsBox.replaceChildren(...slides.map((_, i) => {
           const dot = document.createElement('button');
@@ -752,15 +822,15 @@
         dotsBox.style.display = many ? '' : 'none';
         controls.forEach((c) => { c.style.display = many ? '' : 'none'; });
       }
-
+ 
       const stop = () => { clearInterval(timer); timer = null; };
-
+ 
       function start() {
         stop();
         if (slides.length < 2 || reduceMotion.matches || document.hidden) return;
         timer = setInterval(() => show(current + 1), SLIDE_INTERVAL);
       }
-
+ 
       /* A photo that fails to load is removed so the slideshow never shows a broken image */
       function dropSlide(img) {
         slides = slides.filter((s) => s !== img);
@@ -769,36 +839,36 @@
         show(Math.min(current, Math.max(slides.length - 1, 0)));
         start();
       }
-
+ 
       slides.forEach((img) => {
         if (img.complete && img.naturalWidth === 0) dropSlide(img);
         else img.addEventListener('error', () => dropSlide(img), { once: true });
       });
-
+ 
       root.querySelector('[data-prev]').addEventListener('click', () => { show(current - 1); start(); });
       root.querySelector('[data-next]').addEventListener('click', () => { show(current + 1); start(); });
-
+ 
       /* Pause while the visitor interacts with the banner, or the tab is hidden */
       root.addEventListener('mouseenter', stop);
       root.addEventListener('mouseleave', start);
       root.addEventListener('focusin', stop);
       root.addEventListener('focusout', start);
       document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
-
+ 
       buildDots();
       show(0);
       start();
     })();
   </script>
-
+ 
   <script>
     /* ================= Customer account: log in, register, user card, history ================= */
     (() => {
       'use strict';
-
+ 
       const SLUG = <%- JSON.stringify(tenant.slug) %>;
       const API  = `/api/public/${encodeURIComponent(SLUG)}/customer`;
-
+ 
       const $ = (id) => document.getElementById(id);
       const el = {
         loginBtn: $('loginBtn'),
@@ -814,7 +884,7 @@
         cardEmail: $('cardEmail'),
         historyOpen: $('historyOpen'),
         logoutBtn: $('logoutBtn'),
-
+ 
         authModal: $('authModal'),
         authPanel: $('authPanel'),
         authTitle: $('authTitle'),
@@ -829,7 +899,7 @@
         registerEmail: $('registerEmail'),
         registerMessage: $('registerMessage'),
         registerSubmit: $('registerSubmit'),
-
+ 
         historyModal: $('historyModal'),
         historyPanel: $('historyPanel'),
         historySummary: $('historySummary'),
@@ -838,17 +908,17 @@
         historyEmpty: $('historyEmpty'),
         historyList: $('historyList')
       };
-
+ 
       /* The logged-in customer (from the server), or null */
       let customer = <%- customerJson %>;
       const listeners = new Set();
-
+ 
       /* ---------- Helpers ---------- */
       const firstName = (value) => String(value || '').trim().split(/\s+/)[0];
       const initialOf = (value) => String(value || '?').trim().charAt(0).toUpperCase();
       const formatPhone = (value) => (/^\d{10}$/.test(value) ? `+91 ${value.slice(0, 5)} ${value.slice(5)}` : value);
       const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
-
+ 
       const formatDate = (value) =>
         new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
           weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
@@ -859,10 +929,10 @@
         d.setHours(h, m, 0, 0);
         return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
       };
-
+ 
       const anyModalOpen = () => !!document.querySelector('[data-modal]:not(.hidden)');
       const syncScrollLock = () => document.body.classList.toggle('overflow-hidden', anyModalOpen());
-
+ 
       function showMessage(box, text, tone = 'error') {
         const tones = {
           error: 'bg-red-50 text-red-700',
@@ -873,20 +943,20 @@
         box.className = `rounded-lg px-4 py-3 text-sm ${tones[tone]}`;
       }
       const clearMessage = (box) => { box.className = 'hidden'; box.textContent = ''; };
-
+ 
       /* All account requests go through here */
       async function api(path, { method = 'GET', body } = {}) {
         if (window.TURF_PREVIEW) throw new Error('Log in is not available in the preview.');
-
+ 
         const response = await fetch(`${API}${path}`, {
           method,
           headers: body ? { 'Content-Type': 'application/json' } : undefined,
           body: body ? JSON.stringify(body) : undefined
         });
-
+ 
         let data = {};
         try { data = await response.json(); } catch (_) { /* no JSON body */ }
-
+ 
         if (!response.ok) {
           const error = new Error(data.message || 'Something went wrong. Please try again.');
           error.code = data.code;
@@ -894,80 +964,80 @@
         }
         return data;
       }
-
+ 
       /* ---------- Who is logged in ---------- */
       function render() {
         const loggedIn = !!customer;
-
+ 
         el.loginBtn.classList.toggle('hidden', loggedIn);
         el.userMenu.classList.toggle('hidden', !loggedIn);
         if (!loggedIn) return;
-
+ 
         el.userInitial.textContent = initialOf(customer.name);
         el.userFirstName.textContent = firstName(customer.name);
         el.userFullName.textContent = customer.name;
-
+ 
         el.cardInitial.textContent = initialOf(customer.name);
         el.cardName.textContent = customer.name;
         el.cardPhone.textContent = formatPhone(customer.phone);
         el.cardEmail.textContent = customer.email;
       }
-
+ 
       function setCustomer(next) {
         customer = next;
         render();
         listeners.forEach((listener) => listener(customer));
       }
-
+ 
       /* ---------- User card ---------- */
       function setMenu(open) {
         el.userCard.classList.toggle('hidden', !open);
         el.userBtn.setAttribute('aria-expanded', String(open));
       }
-
+ 
       el.userBtn.addEventListener('click', (event) => {
         event.stopPropagation();
         setMenu(el.userCard.classList.contains('hidden'));
       });
-
+ 
       document.addEventListener('click', (event) => {
         if (!el.userMenu.contains(event.target)) setMenu(false);
       });
-
+ 
       el.userCard.querySelectorAll('[data-menu-link]').forEach((link) =>
         link.addEventListener('click', () => setMenu(false))
       );
-
+ 
       el.logoutBtn.addEventListener('click', async () => {
         setMenu(false);
         try { await api('/logout', { method: 'POST' }); } catch (_) { /* log out on screen anyway */ }
         closeHistory();
         setCustomer(null);
       });
-
+ 
       /* ---------- Log in / Register popup ---------- */
       const AUTH_TEXT = {
         login:    { title: 'Welcome back', subtitle: 'Enter your phone number to log in.' },
         register: { title: 'Create your account', subtitle: 'Just your name, phone number and email.' }
       };
-
+ 
       function setAuthMode(mode) {
         const isLogin = mode === 'login';
-
+ 
         el.loginForm.classList.toggle('hidden', !isLogin);
         el.registerForm.classList.toggle('hidden', isLogin);
         el.authTitle.textContent = AUTH_TEXT[mode].title;
         el.authSubtitle.textContent = AUTH_TEXT[mode].subtitle;
-
+ 
         el.authModal.querySelectorAll('[data-auth-tab]').forEach((tab) => {
           const active = tab.dataset.authTab === mode;
           tab.classList.toggle('tab--active', active);
           tab.setAttribute('aria-selected', String(active));
         });
-
+ 
         (isLogin ? el.loginPhone : el.registerName).focus();
       }
-
+ 
       function openAuth(mode = 'login') {
         if (customer) return;
         clearMessage(el.loginMessage);
@@ -976,12 +1046,12 @@
         syncScrollLock();
         setAuthMode(mode);
       }
-
+ 
       function closeAuth() {
         el.authModal.classList.add('hidden');
         syncScrollLock();
       }
-
+ 
       document.addEventListener('click', (event) => {
         const opener = event.target.closest('[data-auth-open]');
         if (opener) openAuth(opener.dataset.authOpen || 'login');
@@ -990,12 +1060,12 @@
       el.authModal.querySelectorAll('[data-auth-tab]').forEach((tab) =>
         tab.addEventListener('click', () => setAuthMode(tab.dataset.authTab))
       );
-
+ 
       async function submitAuth(form, button, idleText, busyText, messageBox, request) {
         clearMessage(messageBox);
         button.disabled = true;
         button.textContent = busyText;
-
+ 
         try {
           const data = await request();
           form.reset();
@@ -1010,16 +1080,16 @@
         }
         return null;
       }
-
+ 
       el.loginForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const phone = el.loginPhone.value.trim();
-
+ 
         if (!phone) return showMessage(el.loginMessage, 'Please enter your phone number.');
-
+ 
         const error = await submitAuth(el.loginForm, el.loginSubmit, 'Log in', 'Logging in…', el.loginMessage,
           () => api('/login', { method: 'POST', body: { phone } }));
-
+ 
         /* No account for this number: move to the register form with the number filled in */
         if (error && error.code === 'not_found') {
           setAuthMode('register');
@@ -1028,7 +1098,7 @@
           showMessage(el.registerMessage, 'No account found for this number yet. Fill in your details to register.', 'info');
         }
       });
-
+ 
       el.registerForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const body = {
@@ -1036,14 +1106,14 @@
           phone: el.registerPhone.value.trim(),
           email: el.registerEmail.value.trim()
         };
-
+ 
         if (!body.name || !body.phone || !body.email) {
           return showMessage(el.registerMessage, 'Please enter your name, phone number and email.');
         }
-
+ 
         const error = await submitAuth(el.registerForm, el.registerSubmit, 'Create account', 'Creating account…', el.registerMessage,
           () => api('/register', { method: 'POST', body }));
-
+ 
         /* Already registered: move to log in with the number filled in */
         if (error && error.code === 'exists') {
           setAuthMode('login');
@@ -1051,7 +1121,7 @@
           showMessage(el.loginMessage, 'This number is already registered. Log in below.', 'info');
         }
       });
-
+ 
       /* ---------- Booking history ---------- */
       const STATUS_STYLES = {
         pending:   'bg-amber-50 text-amber-700 ring-amber-600/20',
@@ -1060,31 +1130,31 @@
         cancelled: 'bg-red-50 text-red-700 ring-red-600/20'
       };
       const STATUS_LABELS = { pending: 'Pending', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled' };
-
+ 
       function node(tag, className, text) {
         const element = document.createElement(tag);
         if (className) element.className = className;
         if (text !== undefined) element.textContent = text;
         return element;
       }
-
+ 
       function badge(text, style) {
         return node('span', `inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${style}`, text);
       }
-
+ 
       function historyItem(booking) {
         const paid = booking.paymentStatus === 'paid';
         const item = node('li', 'rounded-2xl p-4 ring-1 ring-neutral-200');
-
+ 
         const top = node('div', 'flex items-start justify-between gap-3');
         top.append(
           node('p', 'font-semibold text-neutral-900', formatDate(booking.date)),
           badge(STATUS_LABELS[booking.status] || booking.status, STATUS_STYLES[booking.status] || STATUS_STYLES.pending)
         );
-
+ 
         const time = node('p', 'mt-1 text-sm text-neutral-600',
           `${formatTime(booking.startTime)} – ${formatTime(booking.endTime)} · ${plural(booking.hours, 'hour')}`);
-
+ 
         const bottom = node('div', 'mt-3 flex items-center justify-between gap-3');
         bottom.append(
           node('p', 'font-bold text-neutral-900', `₹${Number(booking.amount).toLocaleString('en-IN')}`),
@@ -1092,32 +1162,32 @@
             ? 'bg-green-50 text-green-700 ring-green-600/20'
             : 'bg-neutral-100 text-neutral-600 ring-neutral-500/20')
         );
-
+ 
         item.append(top, time, bottom);
         return item;
       }
-
+ 
       function setHistoryLoading(loading) {
         el.historyLoading.classList.toggle('hidden', !loading);
         el.historyLoading.classList.toggle('flex', loading);
       }
-
+ 
       async function openHistory() {
         if (!customer) return;
-
+ 
         el.historyModal.classList.remove('hidden');
         syncScrollLock();
         el.historyPanel.focus();
-
+ 
         el.historyList.replaceChildren();
         el.historyEmpty.classList.add('hidden');
         el.historyError.classList.add('hidden');
         el.historySummary.textContent = '';
         setHistoryLoading(true);
-
+ 
         try {
           const data = await api('/bookings');
-
+ 
           el.historyList.replaceChildren(...data.bookings.map(historyItem));
           el.historyEmpty.classList.toggle('hidden', data.bookings.length > 0);
           el.historySummary.textContent = data.bookings.length
@@ -1130,37 +1200,37 @@
           setHistoryLoading(false);
         }
       }
-
+ 
       function closeHistory() {
         el.historyModal.classList.add('hidden');
         syncScrollLock();
       }
-
+ 
       el.historyOpen.addEventListener('click', () => { setMenu(false); openHistory(); });
       el.historyModal.querySelectorAll('[data-history-close]').forEach((closer) => closer.addEventListener('click', closeHistory));
-
+ 
       document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         setMenu(false);
         if (!el.authModal.classList.contains('hidden')) closeAuth();
         else if (!el.historyModal.classList.contains('hidden')) closeHistory();
       });
-
+ 
       /* The booking form below reads the logged-in customer from here */
       window.TurfAccount = {
         get customer() { return customer; },
         onChange(listener) { listeners.add(listener); }
       };
-
+ 
       render();
     })();
   </script>
-
+ 
   <script>
     /* ================= Slot booking ================= */
     (() => {
       'use strict';
-
+ 
       /* ---------- Config ---------- */
       const SLUG  = <%- JSON.stringify(tenant.slug) %>;
       const PRICE = <%= price %>;
@@ -1169,7 +1239,7 @@
       const OPENING = <%- JSON.stringify(tenant.openingTime || '06:00') %>;
       const CLOSING = <%- JSON.stringify(tenant.closingTime || '23:00') %>;
       const OPEN_DAYS = <%- JSON.stringify(tenant.operatingDays || []) %>;
-
+ 
       /* ---------- Elements ---------- */
       const $ = (id) => document.getElementById(id);
       const el = {
@@ -1203,60 +1273,60 @@
         memberName: $('memberName'),
         memberContact: $('memberContact')
       };
-
+ 
       const account = window.TurfAccount; // who is logged in (see the account script above)
-
+ 
       /* ---------- State ---------- */
       let allSlots = [];       // everything the server returned for the chosen date
       let selectedSlots = [];
-
+ 
       const SLOT_STATES = {
         available: 'Available',
         selected: 'Selected',
         booked: 'Booked'
       };
-
+ 
       /* ---------- Helpers ---------- */
       const pad = (n) => String(n).padStart(2, '0');
-
+ 
       const localToday = () => {
         const d = new Date();
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       };
-
+ 
       const toMinutes = (value) => {
         const [h, m] = value.split(':').map(Number);
         return h * 60 + m;
       };
-
+ 
       /* A slot is gone once its start time has passed (only relevant for today) */
       const isPast = (slot) => {
         if (el.date.value !== localToday()) return false;
         const now = new Date();
         return toMinutes(slot.startTime) <= now.getHours() * 60 + now.getMinutes();
       };
-
+ 
       const formatDate = (value) =>
         new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
           weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
         });
-
+ 
       const formatTime = (value) => {
         const [h, m] = value.split(':').map(Number);
         const d = new Date();
         d.setHours(h, m, 0, 0);
         return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
       };
-
+ 
       const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
       const isSameSlot = (a, b) => a.startTime === b.startTime && a.endTime === b.endTime;
-
+ 
       /* Merge back-to-back slots into ranges: 6–7 + 7–8 => "6 pm – 8 pm" */
       function toRanges(slots) {
         const sorted = [...slots].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
         const ranges = [];
         let { startTime: start, endTime: end } = sorted[0];
-
+ 
         for (const slot of sorted.slice(1)) {
           if (slot.startTime === end) {
             end = slot.endTime;
@@ -1269,46 +1339,46 @@
         ranges.push(`${formatTime(start)} – ${formatTime(end)}`);
         return ranges;
       }
-
+ 
       /* ---------- UI updates ---------- */
       function setLoading(isLoading) {
         el.loading.classList.toggle('hidden', !isLoading);
         el.loading.classList.toggle('flex', isLoading);
       }
-
+ 
       function showError(text) {
         el.error.textContent = text;
         el.error.classList.remove('hidden');
       }
-
+ 
       function showMessage(text, success = false) {
         el.message.textContent = text;
         el.message.className = `rounded-lg px-4 py-3 text-sm ${
           success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
         }`;
       }
-
+ 
       /* Logged in: show "Booking as ..." instead of the name, phone and email fields */
       function renderBookingAs() {
         const customer = account.customer;
-
+ 
         el.memberBox.classList.toggle('hidden', !customer);
         el.memberBox.classList.toggle('flex', !!customer);
         el.guestFields.classList.toggle('hidden', !!customer);
         if (!customer) return;
-
+ 
         el.memberInitial.textContent = String(customer.name || '?').trim().charAt(0).toUpperCase();
         el.memberName.textContent = customer.name;
         el.memberContact.textContent = `${customer.phone} · ${customer.email}`;
       }
-
-
+ 
+ 
       function updateSummary() {
         el.summaryDate.textContent = el.date.value ? formatDate(el.date.value) : 'Select a date';
-
+ 
         const count = selectedSlots.length;
         el.bar.hidden = count === 0;
-
+ 
         if (!count) {
           el.summaryTime.textContent = 'No slots selected';
           el.summaryDuration.textContent = '0 hours';
@@ -1316,7 +1386,7 @@
           el.barPrice.textContent = '0';
           return;
         }
-
+ 
         const total = (PRICE * count).toLocaleString('en-IN');
         el.summaryTime.textContent = toRanges(selectedSlots).join(', ');
         el.summaryDuration.textContent = plural(count, 'hour');
@@ -1325,10 +1395,10 @@
         el.barPrice.textContent = total;
         el.submit.textContent = `Request ${plural(count, 'slot')}`;
       }
-
+ 
       /* ---------- Popup ---------- */
       const anyModalOpen = () => !!document.querySelector('[data-modal]:not(.hidden)');
-
+ 
       function openModal() {
         if (!selectedSlots.length) return;
         updateSummary();
@@ -1340,28 +1410,28 @@
         document.body.classList.add('overflow-hidden');
         el.panel.focus();
       }
-
+ 
       function closeModal() {
         el.modal.classList.add('hidden');
         document.body.classList.toggle('overflow-hidden', anyModalOpen());
       }
-
+ 
       /* Logging in or out while the booking popup is open updates it straight away */
       account.onChange(() => {
         renderBookingAs();
         el.message.className = 'hidden';
       });
-
+ 
       /* ---------- Slots ---------- */
       function setSlotState(button, state) {
         button.className = `slot slot--${state}`;
         button.querySelector('.slot-status').textContent = SLOT_STATES[state];
         button.setAttribute('aria-pressed', String(state === 'selected'));
       }
-
+ 
       function toggleSlot(slot, button) {
         const index = selectedSlots.findIndex((s) => isSameSlot(s, slot));
-
+ 
         if (index >= 0) {
           selectedSlots.splice(index, 1);
           setSlotState(button, 'available');
@@ -1371,24 +1441,24 @@
         }
         updateSummary();
       }
-
+ 
       function createSlotButton(slot) {
         const button = document.createElement('button');
         button.type = 'button';
-
+ 
         const status = document.createElement('div');
         status.className = 'slot-status';
-
+ 
         const time = document.createElement('div');
         time.className = 'slot-time';
         time.textContent = formatTime(slot.startTime);
-
+ 
         const end = document.createElement('div');
         end.className = 'slot-end';
         end.textContent = `to ${formatTime(slot.endTime)}`;
-
+ 
         button.append(status, time, end);
-
+ 
         if (slot.available) {
           const isSelected = selectedSlots.some((s) => isSameSlot(s, slot));
           setSlotState(button, isSelected ? 'selected' : 'available');
@@ -1399,26 +1469,26 @@
         }
         return button;
       }
-
+ 
       /* Draws the slots, leaving out any whose time has already passed */
       function renderSlots() {
         const visible = allSlots.filter((slot) => !isPast(slot));
-
+ 
         selectedSlots = selectedSlots.filter((sel) =>
           visible.some((v) => v.available && isSameSlot(v, sel))
         );
-
+ 
         el.grid.replaceChildren(...visible.map(createSlotButton));
         el.empty.classList.toggle('hidden', visible.length > 0);
         updateSummary();
       }
-
+ 
       /* Preview only: every hour between opening and closing is free, and closed days have none */
       function previewSlots(date) {
         const dayKeys = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
         const [y, m, d] = date.split('-').map(Number);
         if (OPEN_DAYS.length && !OPEN_DAYS.includes(dayKeys[new Date(y, m - 1, d).getDay()])) return [];
-
+ 
         const slots = [];
         for (let start = toMinutes(OPENING); start + 60 <= toMinutes(CLOSING); start += 60) {
           const label = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
@@ -1426,11 +1496,11 @@
         }
         return slots;
       }
-
+ 
       async function loadSlots() {
         const date = el.date.value;
         if (!date) return;
-
+ 
         selectedSlots = [];
         allSlots = [];
         updateSummary();
@@ -1438,14 +1508,14 @@
         el.empty.classList.add('hidden');
         el.error.classList.add('hidden');
         setLoading(true);
-
+ 
         try {
           if (PREVIEW) {
             allSlots = previewSlots(date);
             renderSlots();
             return;
           }
-
+ 
           const response = await fetch(
             `/api/public/${encodeURIComponent(SLUG)}/availability?date=${encodeURIComponent(date)}`
           );
@@ -1459,52 +1529,52 @@
           setLoading(false);
         }
       }
-
+ 
       /* Remove slots as their time passes while the page stays open */
       setInterval(() => {
         if (!allSlots.length) return;
         const hadSelection = selectedSlots.length > 0;
         renderSlots();
-
+ 
         const formOpen = !el.modal.classList.contains('hidden') && !el.formView.classList.contains('hidden');
         if (hadSelection && !selectedSlots.length && formOpen) {
           closeModal();
           showError('The time for your selected slot has passed. Please choose another slot.');
         }
       }, PAST_CHECK_MS);
-
+ 
       /* ---------- Booking request ---------- */
       async function submitBooking(event) {
         event.preventDefault();
-
+ 
         if (!selectedSlots.length) {
           return showMessage('Please select at least one available slot.');
         }
-
+ 
         /* Logged in: the server uses the saved details. Otherwise they come from the form. */
         const details = {};
-
+ 
         if (!account.customer) {
           details.customerName  = el.name.value.trim();
           details.customerPhone = el.phone.value.trim();
           details.customerEmail = el.email.value.trim();
-
+ 
           if (!details.customerName || !details.customerPhone) {
             return showMessage('Please enter your name and phone number.');
           }
         }
-
+ 
         if (PREVIEW) {
           el.successText.textContent = 'This is a preview, so no booking was made.';
           el.formView.classList.add('hidden');
           el.successView.classList.remove('hidden');
           return;
         }
-
+ 
         el.submit.disabled = true;
         el.submit.textContent = 'Sending request…';
         let failure = null;
-
+ 
         try {
           const response = await fetch(`/public-booking/${encodeURIComponent(SLUG)}`, {
             method: 'POST',
@@ -1517,7 +1587,7 @@
           });
           const data = await response.json();
           if (!response.ok) throw new Error(data.message || 'Booking failed.');
-
+ 
           el.form.reset();
           el.successText.textContent = data.message || 'Booking request sent. The turf owner will confirm it.';
           el.formView.classList.add('hidden');
@@ -1528,18 +1598,94 @@
           el.submit.disabled = false;
           await loadSlots(); // refresh availability and reset selection either way
         }
-
+ 
         if (failure) {
           closeModal();
           showError(failure);
         }
       }
-
+ 
       /* ---------- Init ---------- */
-      const today = localToday();       // use the visitor's own date, not the server's
-      el.date.min = today;
-      el.date.value = today;
-
+      /* Date strip: today and the next 20 days, using the visitor's own date */
+      const DAYS_AHEAD = 20;
+      const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const strip = $('dateStrip');
+      const dateLabel = $('dateLabel');
+ 
+      const isOpenDay = (date) => !OPEN_DAYS.length || OPEN_DAYS.includes(DAY_KEYS[date.getDay()]);
+      const dateValue = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+ 
+      function pickDate(value, fromUser) {
+        el.date.value = value;
+        let active = null;
+ 
+        strip.querySelectorAll('[data-date]').forEach((chip) => {
+          const on = chip.dataset.date === value;
+          if (on) active = chip;
+          if (!chip.disabled) chip.className = `day ${on ? 'day--active' : ''}`;
+          chip.setAttribute('aria-pressed', String(on));
+        });
+ 
+        dateLabel.textContent = new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
+          weekday: 'long', day: 'numeric', month: 'long'
+        });
+ 
+        if (active) {
+          /* Scroll the strip itself (not the page) so the chosen day is in view */
+          strip.scrollLeft = active.offsetLeft - strip.clientWidth / 2 + active.clientWidth / 2;
+        }
+        if (fromUser) loadSlots();
+      }
+ 
+      function buildDateStrip() {
+        const start = new Date();
+        const chips = [];
+        let first = null;
+ 
+        for (let i = 0; i <= DAYS_AHEAD; i += 1) {
+          const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          const value = dateValue(date);
+          const open = isOpenDay(date);
+          if (open && !first) first = value;
+ 
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.dataset.date = value;
+          chip.className = 'day';
+ 
+          const weekday = document.createElement('span');
+          weekday.className = 'text-[11px] font-semibold uppercase tracking-wide opacity-80';
+          weekday.textContent = i === 0 ? 'Today' : date.toLocaleDateString('en-IN', { weekday: 'short' });
+ 
+          const dayNumber = document.createElement('span');
+          dayNumber.className = 'text-xl font-extrabold leading-tight';
+          dayNumber.textContent = String(date.getDate());
+ 
+          const month = document.createElement('span');
+          month.className = 'text-[11px] font-medium uppercase opacity-80';
+          month.textContent = open ? date.toLocaleDateString('en-IN', { month: 'short' }) : 'Closed';
+ 
+          chip.append(weekday, dayNumber, month);
+          chip.setAttribute('aria-label', `${date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}${open ? '' : ', closed'}`);
+ 
+          if (open) {
+            chip.addEventListener('click', () => pickDate(value, true));
+          } else {
+            chip.disabled = true;
+            chip.className = 'day day--off';
+          }
+          chips.push(chip);
+        }
+ 
+        strip.replaceChildren(...chips);
+        return first || dateValue(start);
+      }
+ 
+      $('dayPrev').addEventListener('click', () => strip.scrollBy({ left: -strip.clientWidth * 0.8 }));
+      $('dayNext').addEventListener('click', () => strip.scrollBy({ left: strip.clientWidth * 0.8 }));
+ 
+      pickDate(buildDateStrip(), false);
+ 
       el.date.addEventListener('change', loadSlots);
       el.form.addEventListener('submit', submitBooking);
       el.next.addEventListener('click', openModal);
@@ -1553,6 +1699,7 @@
       loadSlots();
     })();
   </script>
-
+ 
 </body>
 </html>
+ 
