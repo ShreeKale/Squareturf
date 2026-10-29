@@ -13,6 +13,7 @@ const Tenant = require('./models/Tenant');
 const Booking = require('./models/Booking');
 const Plan = require('./models/Plan');
 const Customer = require('./models/Customer');
+const Review = require('./models/Review');
 
 const { requireAuth, requireOwner, requireAdmin } = require('./middleware/auth');
 const tenantResolver = require('./middleware/tenant');
@@ -514,6 +515,103 @@ app.get(
         hours: sessions.reduce((total, session) => total + session.hours, 0)
       }
     });
+  })
+);
+
+/* =========================================================
+   REVIEWS (public turf website)
+   Anyone can read them. A logged-in customer can review once their booking is confirmed.
+========================================================= */
+
+/* "Asha Kulkarni" becomes "Asha K." so full names are not shown publicly */
+function reviewerName(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'Customer';
+  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1].charAt(0).toUpperCase()}.` : parts[0];
+}
+
+/* A customer may review after at least one confirmed or completed booking on a day that has started */
+const hasPlayed = (tenantId, customerId) =>
+  Booking.exists({
+    tenant: tenantId,
+    customer: customerId,
+    status: { $in: ['confirmed', 'completed'] },
+    date: { $lte: getLocalDateString() }
+  });
+
+app.get(
+  '/api/public/:slug/reviews',
+  loadPublicTurf,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.turf._id;
+    const customer = await getSessionCustomer(req, req.turf);
+
+    const [counts, list, mine, eligible] = await Promise.all([
+      Review.aggregate([
+        { $match: { tenant: tenantId, hidden: false } },
+        { $group: { _id: '$rating', count: { $sum: 1 } } }
+      ]),
+      Review.find({ tenant: tenantId, hidden: false }).sort({ createdAt: -1 }).limit(30).lean(),
+      customer ? Review.findOne({ tenant: tenantId, customer: customer._id }).lean() : null,
+      customer ? hasPlayed(tenantId, customer._id) : false
+    ]);
+
+    const breakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    counts.forEach((row) => { breakdown[row._id] = row.count; });
+
+    const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
+    const points = Object.entries(breakdown).reduce((sum, [stars, n]) => sum + Number(stars) * n, 0);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      summary: { count: total, average: total ? Math.round((points / total) * 10) / 10 : 0, breakdown },
+      reviews: list.map((review) => ({
+        name: reviewerName(review.customerName),
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt
+      })),
+      loggedIn: Boolean(customer),
+      canReview: Boolean(eligible),
+      mine: mine ? { rating: mine.rating, comment: mine.comment } : null
+    });
+  })
+);
+
+app.post(
+  '/api/public/:slug/reviews',
+  customerLimiter,
+  loadPublicTurf,
+  asyncHandler(async (req, res) => {
+    const customer = await getSessionCustomer(req, req.turf);
+
+    if (!customer) {
+      return res.status(401).json({ message: 'Please log in to write a review.' });
+    }
+
+    const rating = Number(req.body.rating);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Please choose a rating from 1 to 5 stars.' });
+    }
+
+    if (!(await hasPlayed(req.turf._id, customer._id))) {
+      return res.status(403).json({ message: 'You can write a review after one of your bookings is confirmed.' });
+    }
+
+    const comment = String(req.body.comment || '').trim().slice(0, 500);
+    const now = new Date();
+
+    /* One review per customer: writing again edits it */
+    await Review.findOneAndUpdate(
+      { tenant: req.turf._id, customer: customer._id },
+      {
+        $set: { rating, comment, customerName: customer.name, updatedAt: now },
+        $setOnInsert: { createdAt: now, hidden: false }
+      },
+      { upsert: true }
+    );
+
+    res.json({ message: 'Thank you for your review.' });
   })
 );
 
