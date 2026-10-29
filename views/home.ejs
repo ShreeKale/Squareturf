@@ -1,10 +1,10 @@
 <%- include('partials/head', { title, fullWidth: true }) %>
  
 <%
-  /* ---------- Sample slots shown in the hero card ---------- */
+  /* ---------- Sample slots shown in the hero card (hourly ranges) ---------- */
   const previewSlots = [
-    ['6:00 PM', 'open'], ['7:00 PM', 'booked'], ['8:00 PM', 'selected'], ['9:00 PM', 'open'],
-    ['10:00 PM', 'open'], ['11:00 PM', 'booked'], ['12:00 AM', 'open'], ['1:00 AM', 'booked']
+    ['6pm–7pm', 'open'], ['7pm–8pm', 'booked'], ['8pm–9pm', 'selected'], ['9pm–10pm', 'open'],
+    ['10pm–11pm', 'open'], ['11pm–12am', 'booked'], ['12am–1am', 'open'], ['1am–2am', 'booked']
   ];
   const slotStyles = {
     open: 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300',
@@ -98,6 +98,24 @@
   /* Date strip in the website demo scrolls sideways without a visible bar */
   .demo-scroll { scrollbar-width: none; -ms-overflow-style: none; }
   .demo-scroll::-webkit-scrollbar { display: none; }
+ 
+  /* Pricing on phones: swipe sideways, one plan in the middle with its neighbours peeking in.
+     Change --plan-w to make the cards wider or narrower. */
+  :root { --plan-w: min(70vw, 17.5rem); }
+  @media (max-width: 639px) {
+    .plan-scroller {
+      position: relative;
+      display: flex;
+      gap: .75rem;
+      margin-inline: -1rem;
+      padding: 1rem calc((100vw - var(--plan-w)) / 2) 1.5rem;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+    }
+    .plan-scroller::-webkit-scrollbar { display: none; }
+    .plan-scroller > [data-plan] { flex: 0 0 var(--plan-w); scroll-snap-align: center; }
+  }
 </style>
  
 <!-- ================= Hero ================= -->
@@ -120,8 +138,8 @@
   <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-12 sm:px-6 md:py-16 lg:grid-cols-12 lg:px-8">
  
     <div class="st-rise lg:col-span-6">
-      <p class="inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/30 backdrop-blur">
-        <i data-lucide="sparkles" class="h-4 w-4"></i>Made for turf and ground owners
+      <p class="inline-flex items-center rounded-full bg-white/15 px-3.5 py-1.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/30 backdrop-blur">
+        Made for turf and ground owners
       </p>
       <h1 class="mt-5 text-4xl font-extrabold leading-[1.05] tracking-tight text-white drop-shadow-sm sm:text-5xl lg:text-6xl">
         Your turf, booked online around the clock.
@@ -164,12 +182,12 @@
  
           <div class="mt-5 grid grid-cols-3 gap-2.5 sm:grid-cols-4" role="list" aria-label="Sample time slots">
             <% previewSlots.forEach(([time, state]) => { %>
-              <div role="listitem" class="rounded-lg px-2 py-2.5 text-center text-sm font-medium <%= slotStyles[state] %>"><%= time %></div>
+              <div role="listitem" class="rounded-lg px-1.5 py-2.5 text-center text-[13px] font-medium sm:px-2 sm:text-sm <%= slotStyles[state] %>"><%= time %></div>
             <% }) %>
           </div>
  
           <div class="mt-5 flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3 ring-1 ring-inset ring-neutral-200">
-            <p class="text-sm text-neutral-600"><span class="font-semibold text-neutral-900">8:00 PM</span> selected</p>
+            <p class="text-sm text-neutral-600"><span class="font-semibold text-neutral-900">8pm–9pm</span> selected</p>
             <span class="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white">Confirm booking</span>
           </div>
         </div>
@@ -341,43 +359,38 @@
  
 <!-- ================= Less infrastructure ================= -->
 <section id="platform" class="mx-auto max-w-7xl scroll-mt-16 px-4 py-10 sm:px-6 sm:py-12 md:py-16 lg:px-8">
-  <div class="relative overflow-hidden rounded-3xl bg-emerald-950 px-5 py-8 sm:px-10 sm:py-10 lg:px-14">
-    <div class="turf-bg absolute inset-0 opacity-25" aria-hidden="true"></div>
-    <div class="relative">
-      <div class="max-w-3xl">
-        <h2 class="text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl">
-          Less Infrastructure. Lower Costs. More Focus on Your Turf.
-        </h2>
-        <p class="mt-4 text-base leading-relaxed text-emerald-50 sm:text-lg">
-          SquareTurf simplifies the technology behind your turf business. Instead of setting up and managing multiple technical services independently, you can manage your online presence through one platform.
-        </p>
-      </div>
- 
-      <ul class="mt-6 grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:mt-8 sm:gap-4 lg:grid-cols-4">
-        <% managed.forEach(([icon, heading, text]) => { %>
-          <li class="min-w-0 rounded-2xl bg-white/10 p-4 ring-1 ring-inset ring-white/20 backdrop-blur sm:p-5">
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white sm:h-11 sm:w-11">
-              <i data-lucide="<%= icon %>" class="h-5 w-5"></i>
-            </span>
-            <h3 class="mt-4 text-base font-bold text-white sm:text-lg"><%= heading %></h3>
-            <p class="mt-1.5 text-sm leading-relaxed text-emerald-50"><%= text %></p>
-          </li>
-        <% }) %>
-      </ul>
-    </div>
+  <div class="max-w-3xl">
+    <h2 class="text-2xl font-extrabold leading-tight tracking-tight text-neutral-900 sm:text-4xl">
+      Less Infrastructure. Lower Costs. More Focus on Your Turf.
+    </h2>
+    <p class="mt-4 text-base leading-relaxed text-neutral-600 sm:text-lg">
+      SquareTurf simplifies the technology behind your turf business. Instead of setting up and managing multiple technical services independently, you can manage your online presence through one platform.
+    </p>
   </div>
+ 
+  <ul class="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 lg:grid-cols-4">
+    <% managed.forEach(([icon, heading, text]) => { %>
+      <li class="min-w-0 rounded-2xl bg-white p-3.5 ring-1 ring-neutral-200 sm:p-5">
+        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:h-11 sm:w-11">
+          <i data-lucide="<%= icon %>" class="h-4 w-4 sm:h-5 sm:w-5"></i>
+        </span>
+        <h3 class="mt-3 text-sm font-bold leading-snug text-neutral-900 sm:mt-4 sm:text-lg"><%= heading %></h3>
+        <p class="mt-1 text-xs leading-relaxed text-neutral-600 sm:mt-1.5 sm:text-sm"><%= text %></p>
+      </li>
+    <% }) %>
+  </ul>
 </section>
  
 <!-- ================= How it works ================= -->
 <section id="how-it-works" class="mx-auto max-w-7xl scroll-mt-16 px-4 py-10 sm:px-6 sm:py-12 md:py-16 lg:px-8">
   <p class="text-sm font-semibold uppercase tracking-wide text-blue-700">How it works</p>
   <h2 class="mt-2 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl">Go live in four simple steps</h2>
-  <ol class="mt-6 grid gap-4 sm:mt-8 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
+  <ol class="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-6 lg:grid-cols-4">
     <% steps.forEach(([heading, text], index) => { %>
-      <li class="relative rounded-2xl bg-white p-6 ring-1 ring-neutral-200">
-        <span class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white"><%= index + 1 %></span>
-        <h3 class="mt-4 text-lg font-bold"><%= heading %></h3>
-        <p class="mt-1.5 leading-relaxed text-neutral-600"><%= text %></p>
+      <li class="relative min-w-0 rounded-2xl bg-white p-4 ring-1 ring-neutral-200 sm:p-6">
+        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white sm:h-9 sm:w-9"><%= index + 1 %></span>
+        <h3 class="mt-3 text-[15px] font-bold leading-snug sm:mt-4 sm:text-lg"><%= heading %></h3>
+        <p class="mt-1.5 text-[13px] leading-relaxed text-neutral-600 sm:text-base"><%= text %></p>
       </li>
     <% }) %>
   </ol>
@@ -393,29 +406,28 @@
       <p class="mt-3 text-base leading-relaxed text-neutral-600 sm:mt-4 sm:text-lg">Start with Basic and upgrade as your business grows. Prices are per month.</p>
     </div>
  
-    <!-- Three plans side by side, even on a phone (smaller cards, shorter lists) -->
-    <div class="mx-auto mt-8 grid max-w-5xl grid-cols-3 items-stretch gap-2 sm:mt-10 sm:gap-4 md:gap-6">
+    <!-- Phones: swipe sideways, the middle plan opens first (see .plan-scroller in the style block).
+         Tablets and computers: all three side by side. -->
+    <div id="planScroller" class="plan-scroller mt-6 sm:mx-auto sm:mt-10 sm:grid sm:max-w-5xl sm:grid-cols-3 sm:items-stretch sm:gap-4 md:gap-6">
       <% plans.forEach((p, i) => { const featured = i === 1; %>
-        <article class="relative flex min-w-0 flex-col rounded-xl bg-white p-2.5 sm:rounded-2xl sm:p-5 md:p-7 <%= featured ? 'ring-2 ring-blue-600 shadow-xl shadow-neutral-900/10' : 'ring-1 ring-neutral-200 shadow-sm' %>">
+        <article data-plan class="relative flex flex-col rounded-2xl bg-white p-5 md:p-7 <%= featured ? 'ring-2 ring-blue-600 shadow-xl shadow-neutral-900/10' : 'ring-1 ring-neutral-200 shadow-sm' %>">
           <% if (featured) { %>
-            <span class="absolute -top-2.5 left-2 whitespace-nowrap rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white sm:-top-3 sm:left-5 sm:px-3 sm:py-1 sm:text-xs md:left-7">
-              <span class="sm:hidden">Popular</span><span class="hidden sm:inline">Most popular</span>
-            </span>
+            <span class="absolute -top-3 left-5 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white md:left-7">Most popular</span>
           <% } %>
-          <h3 class="mt-1 text-sm font-bold text-neutral-900 sm:mt-0 sm:text-lg"><%= p.name %></h3>
-          <p class="mt-1 hidden text-sm text-neutral-600 sm:block"><%= p.desc %></p>
-          <p class="mt-2 flex flex-col sm:mt-6 sm:flex-row sm:items-baseline sm:gap-1">
-            <span class="text-xl font-extrabold tracking-tight text-neutral-900 sm:text-4xl md:text-5xl">₹<%= p.price %></span>
-            <span class="text-[11px] text-neutral-500 sm:text-sm">/ month</span>
+          <h3 class="text-lg font-bold text-neutral-900"><%= p.name %></h3>
+          <p class="mt-1 text-sm text-neutral-600"><%= p.desc %></p>
+          <p class="mt-5 flex items-baseline gap-1 sm:mt-6">
+            <span class="text-4xl font-extrabold tracking-tight text-neutral-900 md:text-5xl">₹<%= p.price %></span>
+            <span class="text-sm text-neutral-500">/ month</span>
           </p>
           <a href="/register"
-             class="mt-3 block rounded-lg py-2 text-center text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mt-6 sm:py-3 sm:text-sm <%= featured ? 'bg-neutral-900 text-white hover:bg-neutral-700' : 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50' %>">
-            <span class="sm:hidden">Start</span><span class="hidden sm:inline">Get started with <%= p.name %></span>
+             class="mt-5 block rounded-lg py-3 text-center text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:mt-6 <%= featured ? 'bg-neutral-900 text-white hover:bg-neutral-700' : 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50' %>">
+            Get started with <%= p.name %>
           </a>
-          <ul class="mt-3 flex-1 space-y-2 border-t border-neutral-200 pt-3 sm:mt-7 sm:space-y-3 sm:pt-7">
-            <% p.features.forEach((f, n) => { %>
-              <li class="items-start gap-1.5 text-[11px] leading-snug text-neutral-700 sm:gap-3 sm:text-sm <%= n >= 4 ? 'hidden sm:flex' : 'flex' %>">
-                <i data-lucide="check" class="mt-0.5 h-3 w-3 shrink-0 text-blue-600 sm:h-4 sm:w-4"></i>
+          <ul class="mt-6 flex-1 space-y-3 border-t border-neutral-200 pt-6 sm:mt-7 sm:pt-7">
+            <% p.features.forEach((f) => { %>
+              <li class="flex items-start gap-3 text-sm text-neutral-700">
+                <i data-lucide="check" class="mt-0.5 h-4 w-4 shrink-0 text-blue-600"></i>
                 <span class="min-w-0 break-words"><%= f %></span>
               </li>
             <% }) %>
@@ -423,6 +435,9 @@
         </article>
       <% }) %>
     </div>
+ 
+    <!-- Position dots (phones only) -->
+    <div id="planDots" class="flex justify-center gap-2 sm:hidden" role="group" aria-label="Choose a plan"></div>
  
     <p class="mt-6 text-center text-sm text-neutral-600">
       7-day free trial on every plan. No card needed. <a href="/pricing" class="font-semibold text-blue-700 underline underline-offset-2">See every feature in each plan</a>
@@ -482,10 +497,13 @@
     const button = document.getElementById('demoButton');
     if (!dates || !grid) return;
  
-    const hourLabel = (h) => {
-      const d = new Date(); d.setHours(h, 0, 0, 0);
-      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+    /* 6 -> "6am", 21 -> "9pm", 24 -> "12am" */
+    const clock = (h) => {
+      const hour = h % 24;
+      return `${hour % 12 || 12}${hour < 12 ? 'am' : 'pm'}`;
     };
+    /* One slot = one hour, shown as "6am–7am" */
+    const slotLabel = (h) => `${clock(h)}–${clock(h + 1)}`;
  
     let dayIndex = 0;
     let picked = new Set();
@@ -499,9 +517,9 @@
         slot.type = 'button';
         const taken = isTaken(dayIndex, h);
         const on = picked.has(h);
-        slot.textContent = hourLabel(h);
+        slot.textContent = slotLabel(h);
         slot.setAttribute('aria-pressed', String(on));
-        slot.className = 'min-h-[44px] rounded-lg px-1.5 py-2.5 text-center text-[13px] font-medium transition-colors sm:px-2 sm:py-3 sm:text-sm ' + (
+        slot.className = 'min-h-[44px] rounded-lg px-1 py-2.5 text-center text-[13px] font-medium transition-colors sm:px-2 sm:py-3 sm:text-sm ' + (
           taken ? 'cursor-not-allowed bg-neutral-100 text-neutral-400 line-through'
           : on ? 'bg-blue-600 text-white shadow-md ring-1 ring-inset ring-blue-600'
           : 'bg-white text-neutral-900 ring-1 ring-inset ring-neutral-300 hover:ring-blue-600');
@@ -552,5 +570,63 @@
   })();
 </script>
  
-<%- include('partials/foot') %>
+<script>
+  /* Pricing on phones: open on the middle plan, and keep the dots in step with the swiping */
+  (() => {
+    'use strict';
  
+    const scroller = document.getElementById('planScroller');
+    const dotsBox = document.getElementById('planDots');
+    if (!scroller || !dotsBox) return;
+ 
+    const cards = [...scroller.querySelectorAll('[data-plan]')];
+    const phone = window.matchMedia('(max-width: 639px)');
+    const centreOf = (card) => card.offsetLeft - (scroller.clientWidth - card.offsetWidth) / 2;
+    const middleOf = (card) => card.offsetLeft + card.offsetWidth / 2;
+ 
+    const dots = cards.map((card) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.setAttribute('aria-label', `Show ${card.querySelector('h3').textContent} plan`);
+      dot.addEventListener('click', () => scroller.scrollTo({ left: centreOf(card), behavior: 'smooth' }));
+      dotsBox.append(dot);
+      return dot;
+    });
+ 
+    function mark() {
+      const centre = scroller.scrollLeft + scroller.clientWidth / 2;
+      let nearest = 0;
+      cards.forEach((card, i) => {
+        if (Math.abs(middleOf(card) - centre) < Math.abs(middleOf(cards[nearest]) - centre)) nearest = i;
+      });
+      dots.forEach((dot, i) => {
+        dot.className = 'h-2 rounded-full transition-all ' + (i === nearest ? 'w-6 bg-neutral-900' : 'w-2 bg-neutral-300');
+        dot.setAttribute('aria-current', String(i === nearest));
+      });
+    }
+ 
+    /* Put the middle (most popular) plan on screen, instantly. Runs again once the page has
+       finished loading, because fonts and icons can shift the layout after the first run. */
+    function openOnMiddle() {
+      if (!phone.matches) return;
+      scroller.scrollLeft = centreOf(cards[1] || cards[0]);
+      mark();
+    }
+ 
+    let waiting = false;
+    scroller.addEventListener('scroll', () => {
+      if (waiting) return;
+      waiting = true;
+      requestAnimationFrame(() => { waiting = false; mark(); });
+    }, { passive: true });
+ 
+    openOnMiddle();
+    requestAnimationFrame(openOnMiddle);
+    window.addEventListener('load', openOnMiddle);
+    window.addEventListener('pageshow', openOnMiddle);
+    phone.addEventListener('change', openOnMiddle);
+    mark();
+  })();
+</script>
+ 
+<%- include('partials/foot') %>
