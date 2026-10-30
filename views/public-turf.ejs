@@ -8,6 +8,8 @@
   /* Colour theme (replaces the blue shades) and preview mode (owner checking the site before it is live) */
   const accent    = (locals.theme && locals.theme.colors) || null;
   const isPreview = !!locals.preview;
+  const themeColor = (accent && accent[600]) || '#2563eb';
+  const canInstall = !isPreview && locals.pwaBase !== undefined;
  
   /* The logged-in customer of this turf website, or null */
   const currentCustomer = locals.customer || null;
@@ -150,6 +152,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= name %> | SquareTurf</title>
+ 
+  <% if (canInstall) { %>
+    <!-- Install as an app -->
+    <link rel="manifest" href="<%= pwaBase %>/manifest.webmanifest">
+    <meta name="theme-color" content="<%= themeColor %>">
+    <link rel="apple-touch-icon" href="<%= pwaBase %>/icon-180.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="<%= name %>">
+  <% } %>
  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2092,6 +2104,104 @@
       loadReviews();
     })();
   </script>
+ 
+  <% if (canInstall) { %>
+  <!-- Install app popup: shown on every visit while the site is not installed -->
+  <div id="installPrompt" class="fixed inset-x-4 bottom-4 z-[60] hidden sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-sm" role="dialog" aria-labelledby="installTitle" aria-live="polite">
+    <div class="rounded-2xl bg-white p-4 shadow-2xl ring-1 ring-neutral-200">
+      <div class="flex items-start gap-3">
+        <img src="<%= pwaBase %>/icon-192.png" alt="" class="h-12 w-12 shrink-0 rounded-xl" width="48" height="48">
+        <div class="min-w-0 flex-1">
+          <p id="installTitle" class="font-bold text-neutral-900">Install <%= name %></p>
+          <p id="installText" class="mt-0.5 text-sm text-neutral-600">Add it to your home screen to book slots faster, with no need to search again.</p>
+        </div>
+        <button type="button" id="installClose" aria-label="Close" class="-mr-1 -mt-1 rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="installIos" class="mt-3 hidden rounded-xl bg-neutral-100 px-3 py-2.5 text-sm text-neutral-700">
+        Tap the <strong>Share</strong> button
+        <svg class="inline h-4 w-4 align-text-bottom" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>,
+        then choose <strong>Add to Home Screen</strong>.
+      </div>
+      <div class="mt-3 flex gap-2">
+        <button type="button" id="installNow" class="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Install app</button>
+        <button type="button" id="installLater" class="rounded-lg px-4 py-2.5 text-sm font-semibold text-neutral-600 hover:bg-neutral-100">Not now</button>
+      </div>
+    </div>
+  </div>
+ 
+  <script>
+    (function () {
+      const BASE = <%- JSON.stringify(pwaBase) %>;
+      const HIDE_HOURS = 24;   // after "Not now", wait this long before asking again (0 = ask on every visit)
+      const SHOW_AFTER = 2500; // milliseconds after the page opens
+      const KEY = 'turf-install-hidden-' + (BASE || 'root');
+ 
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(BASE + '/sw.js', { scope: BASE + '/' }).catch(() => {});
+      }
+ 
+      const installed = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      if (installed) return;
+ 
+      const box = document.getElementById('installPrompt');
+      const installBtn = document.getElementById('installNow');
+      const iosHelp = document.getElementById('installIos');
+      let deferred = null;
+      let shown = false;
+ 
+      const hiddenRecently = () => {
+        try {
+          const until = Number(localStorage.getItem(KEY) || 0);
+          return Date.now() < until;
+        } catch (_) { return false; }
+      };
+      const hideForNow = () => {
+        box.classList.add('hidden');
+        try { localStorage.setItem(KEY, String(Date.now() + HIDE_HOURS * 3600 * 1000)); } catch (_) {}
+      };
+ 
+      function show() {
+        if (shown || hiddenRecently()) return;
+        shown = true;
+        setTimeout(() => box.classList.remove('hidden'), SHOW_AFTER);
+      }
+ 
+      /* Android, Chrome and Edge: the browser tells us the site can be installed */
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferred = event;
+        show();
+      });
+ 
+      window.addEventListener('appinstalled', () => {
+        deferred = null;
+        box.classList.add('hidden');
+      });
+ 
+      /* iPhone and iPad have no install button for websites, so we show the steps */
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIos) {
+        iosHelp.classList.remove('hidden');
+        installBtn.classList.add('hidden');
+        document.getElementById('installLater').textContent = 'Got it';
+        show();
+      }
+ 
+      installBtn.addEventListener('click', async () => {
+        if (!deferred) return;
+        deferred.prompt();
+        await deferred.userChoice.catch(() => {});
+        deferred = null;
+        box.classList.add('hidden');
+      });
+      document.getElementById('installLater').addEventListener('click', hideForNow);
+      document.getElementById('installClose').addEventListener('click', hideForNow);
+    })();
+  </script>
+  <% } %>
  
 </body>
 </html>
