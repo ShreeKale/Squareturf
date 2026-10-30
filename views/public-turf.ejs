@@ -50,7 +50,7 @@
   const defaultServices = [
     { name: 'Parking',          description: 'Convenient parking available.' },
     { name: 'Floodlights',      description: 'Evening and night play supported.' },
-    { name: 'Washroom',         description: 'Clean washroom facility.' },
+    { name: 'Restroom',          description: 'Clean restroom facility.' },
     { name: 'Drinking water',   description: 'Drinking water available.' },
     { name: 'Changing room',    description: 'Change and keep your bags safe.' },
     { name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
@@ -63,13 +63,13 @@
  
   /* Facility photo: service.image if the venue set one, otherwise matched by name */
   const facilityPhotos = [
-    [/park/i,                       'https://loremflickr.com/640/480/parking,lot?lock=21'],
-    [/flood|light/i,                'https://loremflickr.com/640/480/floodlight,stadium?lock=22'],
-    [/wash|toilet|rest ?room|bath/i,'https://loremflickr.com/640/480/bathroom,interior?lock=23'],
-    [/water|drink/i,                'https://loremflickr.com/640/480/water,bottle?lock=24'],
-    [/chang|locker|room/i,          'https://loremflickr.com/640/480/locker,room?lock=25'],
-    [/equip|rent|ball|gear/i,       'https://loremflickr.com/640/480/sports,equipment?lock=26'],
-    [/first|aid|medic/i,            'https://loremflickr.com/640/480/first,aid,kit?lock=27'],
+    [/park/i,                       '/img/parking.jpg'],
+    [/flood|light/i,                '/img/floodlights.jfif'],
+    [/wash|toilet|rest ?room|bath/i,'/img/restroom.jpg'],
+    [/water|drink/i,                '/img/water.jfif'],
+    [/chang|locker|room/i,          '/img/changing%20room.jfif'],
+    [/equip|rent|ball|gear/i,       '/img/equipments.jfif'],
+    [/first|aid|medic/i,            '/img/first%20aid.jfif'],
     [/seat|bench|stand|lounge/i,    'https://loremflickr.com/640/480/stadium,seats?lock=28'],
     [/cafe|food|snack|canteen/i,    'https://loremflickr.com/640/480/cafe,snacks?lock=29'],
     [/wifi|wi-fi/i,                 'https://loremflickr.com/640/480/wifi,router?lock=30']
@@ -112,8 +112,7 @@
     ['trophy', 'Sport', tenant.sport || 'Sports turf'],
     ['grid',   'Grounds', String(tenant.groundsCount || 1)],
     ['clock',  'Timing', hasTiming ? `${tenant.openingTime} – ${tenant.closingTime}` : 'Ask the turf'],
-    ['calendar', 'Open', daysLabel],
-    ['rupee',  'Price', `₹${price.toLocaleString('en-IN')} / hour`]
+    ['calendar', 'Open', daysLabel]
   ];
  
   /* Questions most customers ask, answered from this turf's own details */
@@ -396,7 +395,7 @@
           <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
  
-        <div class="flex min-h-[320px] flex-col justify-end p-6 text-white sm:p-8 lg:min-h-[380px]">
+        <div class="flex min-h-[224px] flex-col justify-end p-5 text-white sm:min-h-[320px] sm:p-8 lg:min-h-[380px]">
           <p class="text-sm font-medium text-blue-200"><%= tenant.sport || 'Sports turf' %></p>
           <h1 class="mt-2 max-w-2xl text-3xl font-extrabold tracking-tight sm:text-4xl"><%= name %></h1>
           <% if (tenant.address) { %>
@@ -406,19 +405,10 @@
             </p>
           <% } %>
  
-          <div class="mt-5 flex flex-wrap items-center gap-3">
+          <div class="mt-4 flex flex-wrap items-center gap-3 sm:mt-5">
             <span class="rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur">
-              ₹<%= price.toLocaleString('en-IN') %> <span class="font-normal text-neutral-200">/ hour</span>
+              <span class="font-normal text-neutral-200">Starts from</span> ₹<%= price.toLocaleString('en-IN') %> <span class="font-normal text-neutral-200">/ hour</span>
             </span>
-            <% if (hasTiming) { %>
-              <span class="rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur">
-                <%= tenant.openingTime %> – <%= tenant.closingTime %>
-              </span>
-            <% } %>
-            <a id="heroRating" href="#reviews" class="hidden items-center gap-1.5 rounded-lg bg-white/15 px-3.5 py-2 text-sm font-semibold backdrop-blur hover:bg-white/25">
-              <svg class="h-4 w-4 text-amber-300" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-              <span id="heroRatingText"></span>
-            </a>
           </div>
         </div>
       </div>
@@ -426,7 +416,7 @@
  
     <!-- Quick facts -->
     <section class="mx-auto max-w-6xl px-5 pt-6 lg:px-8" aria-label="Quick facts">
-      <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <ul class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <% facts.forEach(([key, label, value], i) => { %>
           <li class="flex items-center gap-3 rounded-2xl bg-white p-3.5 ring-1 ring-neutral-200 <%= i === facts.length - 1 && facts.length % 2 === 1 ? 'col-span-2 sm:col-span-1' : '' %>">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><%- icon(key, 'h-5 w-5') %></span>
@@ -1941,7 +1931,7 @@
       /* ---------- Reviews ---------- */
       const el = {
         summary: $('ratingSummary'), list: $('reviewList'), empty: $('reviewsEmpty'), hint: $('reviewHint'),
-        write: $('writeReview'), heroRating: $('heroRating'), heroText: $('heroRatingText'),
+        write: $('writeReview'),
         modal: $('reviewModal'), panel: $('reviewPanel'), form: $('reviewForm'), picker: $('starPicker'),
         comment: $('reviewComment'), message: $('reviewMessage'), submit: $('reviewSubmit'), title: $('reviewTitle')
       };
@@ -2029,12 +2019,6 @@
           el.list.replaceChildren(...data.reviews.map(reviewCard));
           el.empty.classList.toggle('hidden', data.reviews.length > 0);
           renderAction();
- 
-          if (data.summary.count) {
-            el.heroText.textContent = `${data.summary.average.toFixed(1)} · ${data.summary.count} ${data.summary.count === 1 ? 'review' : 'reviews'}`;
-            el.heroRating.classList.remove('hidden');
-            el.heroRating.classList.add('inline-flex');
-          }
         } catch (_) {
           el.summary.replaceChildren(node('p', 'text-sm text-neutral-500', 'Reviews could not be loaded right now.'));
         }
@@ -2111,3 +2095,4 @@
  
 </body>
 </html>
+ 
