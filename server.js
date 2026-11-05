@@ -898,36 +898,44 @@ async function renderBookingAction(res, { requestId, token, action, status = 200
   });
 }
 
+/* Does the action, emails the customer when a booking was just confirmed, and shows the result page */
+async function performBookingAction(res, requestId, token, action) {
+  const found = await loadBookingRequest(requestId, token);
+  if (!found) return renderError(res, 403, 'Link not valid', 'This booking link is not valid or the booking no longer exists.');
+
+  const result = await applyBookingAction(action, found.bookings, found.tenant);
+
+  if (result.sendConfirmed) {
+    const fresh = await Booking.find({ requestId }).sort({ date: 1, startTime: 1 }).lean();
+    await bookingMail.sendConfirmedEmail({ tenant: found.tenant, bookings: fresh });
+  }
+
+  await renderBookingAction(res, { requestId, token, action, message: result.message || null, error: result.error || null, status: result.error ? 409 : 200 });
+}
+
+/* Clicking an email button does the action straight away. Cancel asks first: some email programs open every link
+   in a message to scan it, and that must never cancel a booking by itself. */
 app.get(
   '/booking-action/:requestId/:action',
   bookingActionLimiter,
   asyncHandler(async (req, res) => {
     const action = bookingMail.ACTIONS[req.params.action] ? req.params.action : 'confirm';
-    await renderBookingAction(res, { requestId: req.params.requestId, token: req.query.t, action });
+    res.set('Cache-Control', 'no-store');
+
+    if (action === 'cancel') {
+      return renderBookingAction(res, { requestId: req.params.requestId, token: req.query.t, action });
+    }
+    await performBookingAction(res, req.params.requestId, req.query.t, action);
   })
 );
 
+/* Buttons on the result page (and the Cancel confirmation) */
 app.post(
   '/booking-action/:requestId/:action',
   bookingActionLimiter,
   asyncHandler(async (req, res) => {
-    const { requestId } = req.params;
-    const token = req.body.t;
-    const action = req.params.action;
-
-    if (!bookingMail.ACTIONS[action]) return renderError(res, 400, 'Not valid', 'This action is not valid.');
-
-    const found = await loadBookingRequest(requestId, token);
-    if (!found) return renderError(res, 403, 'Link not valid', 'This booking link is not valid or the booking no longer exists.');
-
-    const result = await applyBookingAction(action, found.bookings, found.tenant);
-
-    if (result.sendConfirmed) {
-      const fresh = await Booking.find({ requestId }).sort({ date: 1, startTime: 1 }).lean();
-      await bookingMail.sendConfirmedEmail({ tenant: found.tenant, bookings: fresh });
-    }
-
-    await renderBookingAction(res, { requestId, token, action, message: result.message || null, error: result.error || null, status: result.error ? 409 : 200 });
+    if (!bookingMail.ACTIONS[req.params.action]) return renderError(res, 400, 'Not valid', 'This action is not valid.');
+    await performBookingAction(res, req.params.requestId, req.body.t, req.params.action);
   })
 );
 

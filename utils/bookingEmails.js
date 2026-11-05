@@ -130,7 +130,7 @@ function ownerRequestMail({ tenant, bookings, requestId, origin }) {
     html: layout({
       preheader: `${first.customerName} requested ${info.lines[0]}`,
       title: 'New booking request',
-      intro: `<strong>${esc(first.customerName)}</strong> has requested a slot at <strong>${esc(tenant.name)}</strong>. Use a button below to answer. You will be asked to confirm on the next page.`,
+      intro: `<strong>${esc(first.customerName)}</strong> has requested a slot at <strong>${esc(tenant.name)}</strong>. Tap a button below to update the booking. Confirm, Mark paid and Mark unpaid apply straight away; Cancel asks you once more.`,
       rows,
       extra: `<div>${buttons}</div>`,
       footer: 'These buttons are private to you. Do not forward this email. You can also manage the booking from your SquareTurf dashboard.'
