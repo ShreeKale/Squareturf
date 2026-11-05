@@ -72,6 +72,7 @@
         </label>
         <label class="<%= labelCls %>">Contact email
           <input type="email" name="email" required value="<%= v.email || '' %>" class="<%= inputCls %>">
+          <span class="<%= hintCls %>">Customers see this on your website. Booking requests are also emailed here, with Confirm, Paid, Cancel and Unpaid buttons.</span>
         </label>
         <label class="<%= labelCls %> sm:col-span-2">WhatsApp number <span class="font-normal text-neutral-400">(optional)</span>
           <input name="whatsapp" type="tel" inputmode="numeric" value="<%= v.whatsapp || '' %>" placeholder="98765 43210" class="<%= inputCls %> sm:max-w-xs">

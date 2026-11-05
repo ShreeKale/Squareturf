@@ -453,7 +453,7 @@ app.post(
       const owner = await User.findById(tenant.owner).select('email').lean();
       await bookingMail.sendRequestEmails({
         tenant,
-        ownerEmails: [owner && owner.email, tenant.email],
+        ownerEmails: [tenant.email || (owner && owner.email)], // the contact email the owner gave at registration
         bookings: created,
         requestId,
         origin: `${req.protocol}://${req.get('host')}`
