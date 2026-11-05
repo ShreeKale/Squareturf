@@ -284,7 +284,8 @@
 
       el.start.value = first.startTime;
       el.end.value   = last.endTime;
-      el.amount.value = PRICE * count;
+      /* Each hour can have its own price; the server sends it with every slot */
+      el.amount.value = slots.slice(range.from, range.to + 1).reduce((sum, slot) => sum + (Number.isFinite(slot.price) ? slot.price : PRICE), 0);
 
       el.text.innerHTML = '';
       const strong = document.createElement('strong');

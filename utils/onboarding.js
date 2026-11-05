@@ -47,4 +47,4 @@ function nextStepPath(user, tenant) {
   return STEP_PATHS[onboarding.step] || STEP_PATHS[2];
 }
 
-module.exports = { STEPS, STEP_PATHS, DAYS, ALL_DAYS, isOperatingDay, nextStepPath };
+module.exports = { STEPS, STEP_PATHS, DAYS, ALL_DAYS, JS_DAY_KEYS, isOperatingDay, nextStepPath };

@@ -5,7 +5,32 @@ const RESERVED_SLUGS = new Set([
 /* 3-40 characters: letters, numbers and hyphens, no hyphen at either end */
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
 
-const SPORTS = ['Cricket', 'Box Cricket', 'Football', 'Futsal', 'Badminton', 'Other'];
+const SPORTS = [
+  'Cricket', 'Box Cricket', 'Football', 'Futsal', 'Badminton', 'Tennis',
+  'Pickleball', 'Basketball', 'Volleyball', 'Table Tennis', 'Hockey', 'Other'
+];
+const MAX_SPORTS = 6;
+
+/* Ground surface and size units */
+const SURFACES = [
+  'Artificial grass', 'Natural grass', 'Hybrid grass', 'Concrete', 'Clay',
+  'Rubber / acrylic', 'Wooden floor', 'Sand', 'Other'
+];
+const SIZE_UNITS = [['ft', 'Feet'], ['m', 'Metres'], ['yd', 'Yards']];
+
+/* Facilities an owner can tick. They are saved as the turf's facilities, with this description. */
+const FACILITIES = [
+  { name: 'Parking',          description: 'Convenient parking available.' },
+  { name: 'Restroom',         description: 'Clean restroom facility.' },
+  { name: 'Floodlights',      description: 'Evening and night play supported.' },
+  { name: 'Changing room',    description: 'Change and keep your bags safe.' },
+  { name: 'Drinking water',   description: 'Drinking water available.' },
+  { name: 'Equipment rental', description: 'Balls, bibs and cones on request.' },
+  { name: 'First aid',        description: 'Basic first aid kit on site.' },
+  { name: 'Seating area',     description: 'Sit and watch the game.' },
+  { name: 'Cafe / snacks',    description: 'Snacks and drinks nearby.' },
+  { name: 'Wi-Fi',            description: 'Free Wi-Fi for players.' }
+];
 
 /* Basic plan limit for now. Plan limits are enforced in a later step. */
 const MAX_PHOTOS = 10;
@@ -205,10 +230,92 @@ function parseServices(text) {
     }));
 }
 
+/*
+ * Sports from the sign-up form: the ticked sports, where "Other" is replaced by the names typed in
+ * (comma separated). Returns { sports } or { error }.
+ */
+function readSports(body) {
+  const ticked = [...new Set([].concat(body.sports || []).map(String))];
+  const chosen = ticked.filter((sport) => SPORTS.includes(sport) && sport !== 'Other');
+
+  if (ticked.includes('Other')) {
+    const custom = String(body.otherSport || '')
+      .split(',')
+      .map((name) => name.trim().replace(/\s+/g, ' ').slice(0, 30))
+      .filter(Boolean);
+
+    if (!custom.length) return { error: 'You ticked "Other". Please type the sport name.' };
+    for (const name of custom) {
+      if (!/^[\p{L}\p{N} .&'+\/-]+$/u.test(name)) return { error: 'Sport names can only use letters, numbers and spaces.' };
+      if (!chosen.some((sport) => sport.toLowerCase() === name.toLowerCase())) chosen.push(name);
+    }
+  }
+
+  if (!chosen.length) return { error: 'Select at least one sport.' };
+  if (chosen.length > MAX_SPORTS) return { error: `You can select up to ${MAX_SPORTS} sports.` };
+  return { sports: chosen };
+}
+
+/* Facilities from the tick boxes, as { name, icon, description }. Only known facilities are accepted: the standard list, plus `extra` (an owner's own older facilities). */
+function readFacilities(body, extra = []) {
+  const ticked = new Set([].concat(body.facilities || []).map(String));
+  return [...FACILITIES, ...extra].filter((item) => ticked.has(item.name)).map((item) => ({ ...item, icon: item.icon || '✓' }));
+}
+
+/* Ground size: both numbers or neither. Returns { error } or { dimensions }. */
+function readDimensions(body) {
+  const length = Number(body.length);
+  const width = Number(body.width);
+  const unit = SIZE_UNITS.some(([key]) => key === body.unit) ? body.unit : 'ft';
+
+  const valid = (n) => Number.isFinite(n) && n > 0 && n <= 1000;
+  if (!valid(length) || !valid(width)) return { error: 'Enter the ground length and width (numbers more than 0).' };
+
+  return { dimensions: { length: Math.round(length * 10) / 10, width: Math.round(width * 10) / 10, unit } };
+}
+
+/* A point picked on the map. Returns { error } or { location }. */
+function readLocation(body) {
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+
+  if (body.lat === '' || body.lng === '' || body.lat === undefined || body.lng === undefined ||
+      !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return { error: 'Please pick your turf location on the map.' };
+  }
+  return { location: { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } };
+}
+
+/* Optional social links: a username or a full link. Returns { value } (may be empty) or { error }. */
+function readInstagram(value) {
+  const text = String(value || '').trim();
+  if (text && !/^(https?:\/\/(www\.)?instagram\.com\/\S+|@?[A-Za-z0-9._]{1,30})$/i.test(text)) {
+    return { error: 'Instagram must be a username like @royalturf, or an instagram.com link.' };
+  }
+  return { value: text };
+}
+
+function readFacebook(value) {
+  const text = String(value || '').trim();
+  if (text && !/^(https?:\/\/((www|m|web)\.)?(facebook\.com|fb\.com|fb\.me)\/\S+|@?[A-Za-z0-9.]{5,50})$/i.test(text)) {
+    return { error: 'Facebook must be a page name like royalturf, or a facebook.com link.' };
+  }
+  return { value: text };
+}
+
 module.exports = {
   RESERVED_SLUGS,
   SLUG_PATTERN,
   SPORTS,
+  SURFACES,
+  SIZE_UNITS,
+  FACILITIES,
+  readSports,
+  readFacilities,
+  readDimensions,
+  readLocation,
+  readInstagram,
+  readFacebook,
   MAX_SLOTS_PER_REQUEST,
   asyncHandler,
   cleanSlug,

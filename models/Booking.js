@@ -6,6 +6,9 @@ const bookingSchema = new mongoose.Schema({
   /* Set when the booking was made by a logged-in customer */
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
 
+  /* Slots picked together in one request share this id (used by the owner's email buttons) */
+  requestId: { type: String, default: '', index: true },
+
   customerName: { type: String, required: true, trim: true, maxlength: 100 },
   customerPhone: { type: String, required: true, trim: true, maxlength: 20 },
   customerEmail: { type: String, lowercase: true, trim: true },

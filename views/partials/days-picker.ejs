@@ -1,0 +1,48 @@
+<%
+  /* Shared look (same as the sign-up and settings pages) */
+  const labelCls = 'block text-sm font-medium text-neutral-800';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+  const hintCls  = 'mt-1.5 block text-xs font-normal text-neutral-500';
+  /* Pass: days (list of [key, label]), v = { operatingDays } . Field: operatingDays */
+%>
+    <fieldset class="mt-7">
+      <legend class="<%= labelCls %>">Days you are open</legend>
+      <div class="mt-2 flex flex-wrap gap-2">
+        <% days.forEach(([key, label]) => { %>
+          <label class="cursor-pointer">
+            <input type="checkbox" name="operatingDays" value="<%= key %>" class="peer sr-only"
+                   <%= (v.operatingDays || []).includes(key) ? 'checked' : '' %>>
+            <span class="block rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+              <%= label.slice(0, 3) %>
+            </span>
+          </label>
+        <% }) %>
+      </div>
+      <p class="mt-3 text-xs text-neutral-500">
+        Quick pick:
+        <button type="button" data-days="all" class="font-semibold text-blue-700 underline underline-offset-2">Every day</button> &middot;
+        <button type="button" data-days="weekdays" class="font-semibold text-blue-700 underline underline-offset-2">Weekdays</button> &middot;
+        <button type="button" data-days="weekend" class="font-semibold text-blue-700 underline underline-offset-2">Weekend</button>
+      </p>
+    </fieldset>
+
+<script>
+  (() => {
+    'use strict';
+    /* ---------- Step 3: day shortcuts (hours and pricing are handled in partials/hours-pricing) ---------- */
+    const dayBoxes = [...document.querySelectorAll('input[name="operatingDays"]')];
+    if (dayBoxes.length) {
+      const sets = {
+        all: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+        weekdays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+        weekend: ['sat', 'sun']
+      };
+      document.querySelectorAll('[data-days]').forEach((button) =>
+        button.addEventListener('click', () => {
+          dayBoxes.forEach((box) => { box.checked = sets[button.dataset.days].includes(box.value); });
+        })
+      );
+    }
+
+  })();
+</script>

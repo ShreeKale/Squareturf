@@ -9,12 +9,22 @@ const {
   RESERVED_SLUGS,
   SLUG_PATTERN,
   SPORTS,
+  SURFACES,
+  SIZE_UNITS,
+  FACILITIES,
   asyncHandler,
   cleanSlug,
   isValidTime,
   normalizePhone,
-  isValidEmail
+  isValidEmail,
+  readSports,
+  readFacilities,
+  readDimensions,
+  readLocation,
+  readInstagram,
+  readFacebook
 } = require('../utils/helpers');
+const { daysLabel, hourLabel, priceSummary, readHours, readPricing } = require('../utils/pricing');
 const { STEPS, STEP_PATHS, DAYS, ALL_DAYS, nextStepPath } = require('../utils/onboarding');
 const { THEMES, themeFor } = require('../utils/themes');
 const { saveImage, removeImage, EXTENSIONS: IMAGE_TYPES } = require('../utils/storage');
@@ -204,20 +214,34 @@ router.get('/slug-check', requireVerified, asyncHandler(async (req, res) => {
   });
 }));
 
+/* Sports of a saved turf as form values: ticked sports, and any custom names for the "Other" box */
+function sportValues(tenant) {
+  const saved = tenant && tenant.sports && tenant.sports.length ? [...tenant.sports] : [];
+  const known = saved.filter((sport) => SPORTS.includes(sport) && sport !== 'Other');
+  const custom = saved.filter((sport) => !SPORTS.includes(sport));
+
+  return {
+    sports: custom.length ? [...known, 'Other'] : known,
+    otherSport: custom.join(', ')
+  };
+}
+
 const businessValues = (user, tenant) => ({
   name: tenant ? tenant.name : '',
-  sport: tenant ? tenant.sport : 'Cricket',
+  ...sportValues(tenant),
   slug: tenant ? tenant.slug : '',
   address: tenant ? tenant.address : '',
+  lat: tenant && tenant.location && tenant.location.lat != null ? tenant.location.lat : '',
+  lng: tenant && tenant.location && tenant.location.lng != null ? tenant.location.lng : '',
   phone: (tenant && tenant.phone) || user.phone || '',
   email: (tenant && tenant.email) || user.email
 });
 
+const businessView = (req, res, extra = {}) =>
+  show(req, res, 'business', 2, { sportList: SPORTS, ...extra });
+
 router.get('/business', requireVerified, requireUnfinished, (req, res) => {
-  show(req, res, 'business', 2, {
-    sports: SPORTS,
-    values: businessValues(req.user, req.user.tenant)
-  });
+  businessView(req, res, { values: businessValues(req.user, req.user.tenant) });
 });
 
 router.post(
@@ -230,17 +254,26 @@ router.post(
 
     const values = {
       name: String(req.body.name || '').trim().slice(0, 120),
-      sport: SPORTS.includes(req.body.sport) ? req.body.sport : 'Cricket',
+      sports: [].concat(req.body.sports || []).map(String),
+      otherSport: String(req.body.otherSport || '').slice(0, 120),
       slug: cleanSlug(req.body.slug),
       address: String(req.body.address || '').trim().slice(0, 300),
+      lat: String(req.body.lat || ''),
+      lng: String(req.body.lng || ''),
       phone: String(req.body.phone || '').trim(),
       email: String(req.body.email || '').trim().toLowerCase()
     };
 
-    const fail = (error) => show(req, res, 'business', 2, { error, sports: SPORTS, values });
+    const fail = (error) => businessView(req, res, { error, values });
 
     if (!values.name) return fail('Please enter your turf or business name.');
-    if (!values.address) return fail('Please enter your turf address.');
+
+    const sportCheck = readSports(req.body);
+    if (sportCheck.error) return fail(sportCheck.error);
+
+    const locationCheck = readLocation(req.body);
+    if (locationCheck.error) return fail(locationCheck.error);
+    if (!values.address) return fail('The address could not be found for that spot. Please type it in the address box.');
 
     const phone = normalizePhone(values.phone);
     if (!phone) return fail('Please enter a valid 10-digit contact number.');
@@ -257,9 +290,11 @@ router.post(
 
     const details = {
       name: values.name,
-      sport: values.sport,
+      sports: sportCheck.sports,
+      sport: sportCheck.sports.join(', '),
       slug: values.slug,
       address: values.address,
+      location: locationCheck.location,
       phone,
       email: values.email
     };
@@ -293,14 +328,33 @@ router.post(
    STEP 3: GROUND SETUP
 ========================================================= */
 
-router.get('/grounds', requireVerified, requireStep(3), (req, res) => {
-  const tenant = req.user.tenant;
-
+const groundsView = (req, res, extra = {}) =>
   show(req, res, 'grounds', 3, {
     days: DAYS,
+    surfaces: SURFACES,
+    sizeUnits: SIZE_UNITS,
+    facilityList: FACILITIES,
+    ...extra
+  });
+
+router.get('/grounds', requireVerified, requireStep(3), (req, res) => {
+  const tenant = req.user.tenant;
+  const size = tenant.dimensions || {};
+
+  groundsView(req, res, {
     values: {
       groundsCount: tenant.groundsCount,
+      length: size.length || '',
+      width: size.width || '',
+      unit: size.unit || 'ft',
+      surface: tenant.surface || '',
+      facilities: tenant.facilitiesSet ? tenant.services.map((service) => service.name) : [],
+      pricingMode: tenant.pricingMode,
       pricePerHour: tenant.pricePerHour,
+      pricingRules: tenant.pricingRules.map((rule) => ({
+        days: [...rule.days], startTime: rule.startTime, endTime: rule.endTime, price: rule.price
+      })),
+      open24Hours: tenant.open24Hours,
       openingTime: tenant.openingTime,
       closingTime: tenant.closingTime,
       operatingDays: tenant.operatingDays
@@ -319,39 +373,60 @@ router.post(
       ALL_DAYS.includes(day)
     );
 
+    /* What the owner typed, so the form can be shown again with an error */
+    let typedRules = [];
+    try {
+      const parsed = JSON.parse(String(req.body.pricingRules || '[]'));
+      if (Array.isArray(parsed)) typedRules = parsed.slice(0, 12);
+    } catch { /* shown as no rules */ }
+
     const values = {
       groundsCount: req.body.groundsCount,
+      length: String(req.body.length || ''),
+      width: String(req.body.width || ''),
+      unit: String(req.body.unit || 'ft'),
+      surface: String(req.body.surface || ''),
+      facilities: [].concat(req.body.facilities || []).map(String),
+      pricingMode: req.body.pricingMode === 'custom' ? 'custom' : 'flat',
       pricePerHour: req.body.pricePerHour,
+      pricingRules: typedRules,
+      open24Hours: req.body.open24Hours === '1',
       openingTime: String(req.body.openingTime || ''),
       closingTime: String(req.body.closingTime || ''),
       operatingDays
     };
 
-    const fail = (error) => show(req, res, 'grounds', 3, { error, days: DAYS, values });
+    const fail = (error) => groundsView(req, res, { error, values });
 
     const groundsCount = Number(values.groundsCount);
     if (!Number.isInteger(groundsCount) || groundsCount < 1 || groundsCount > MAX_GROUNDS) {
       return fail(`Number of grounds must be a whole number from 1 to ${MAX_GROUNDS}.`);
     }
 
-    const pricePerHour = Number(values.pricePerHour);
-    if (!Number.isFinite(pricePerHour) || pricePerHour < 1) {
-      return fail('Please enter your price per hour (more than 0).');
-    }
+    const size = readDimensions(req.body);
+    if (size.error) return fail(size.error);
 
-    if (!isValidTime(values.openingTime) || !isValidTime(values.closingTime)) {
-      return fail('Please enter valid opening and closing times.');
-    }
-    if (values.closingTime <= values.openingTime) {
-      return fail('Closing time must be later than opening time.');
-    }
+    if (!SURFACES.includes(values.surface)) return fail('Please select the ground surface.');
+
+    const hours = readHours(req.body, isValidTime);
+    if (hours.error) return fail(hours.error);
     if (!operatingDays.length) return fail('Select at least one day you are open.');
+
+    const pricing = readPricing(req.body);
+    if (pricing.error) return fail(pricing.error);
 
     tenant.set({
       groundsCount,
-      pricePerHour,
-      openingTime: values.openingTime,
-      closingTime: values.closingTime,
+      dimensions: size.dimensions,
+      surface: values.surface,
+      services: readFacilities(req.body),
+      facilitiesSet: true,
+      pricePerHour: pricing.pricePerHour,
+      pricingMode: pricing.pricingMode,
+      pricingRules: pricing.pricingRules,
+      open24Hours: hours.open24Hours,
+      openingTime: hours.openingTime,
+      closingTime: hours.closingTime,
       operatingDays
     });
     advanceTo(tenant, 4);
@@ -405,7 +480,9 @@ router.get('/website', requireVerified, requireStep(4), (req, res) => {
   websiteView(req, res, {
     values: {
       description: hasDescription ? tenant.description : '',
-      theme: themeFor(tenant.theme).key
+      theme: themeFor(tenant.theme).key,
+      instagram: tenant.instagram || '',
+      facebook: tenant.facebook || ''
     }
   });
 });
@@ -424,7 +501,9 @@ router.post(
 
     const values = {
       description: String(req.body.description || '').trim(),
-      theme: String(req.body.theme || '')
+      theme: String(req.body.theme || ''),
+      instagram: String(req.body.instagram || '').trim(),
+      facebook: String(req.body.facebook || '').trim()
     };
 
     const fail = (error) => websiteView(req, res, { error, values });
@@ -434,6 +513,12 @@ router.post(
     if (values.description.length < 20) return fail('Write a short description of your turf (at least 20 characters).');
     if (values.description.length > 1000) return fail('The description can be up to 1000 characters.');
     if (!THEMES[values.theme]) return fail('Please select a theme.');
+
+    /* Social links are optional, and shown to customers, so only safe values are saved */
+    const instagram = readInstagram(values.instagram);
+    if (instagram.error) return fail(instagram.error);
+    const facebook = readFacebook(values.facebook);
+    if (facebook.error) return fail(facebook.error);
 
     /* Only photos this turf really has can be removed */
     const removed = new Set([].concat(req.body.removePhotos || []).map(String).filter((url) => tenant.images.includes(url)));
@@ -464,6 +549,8 @@ router.post(
       tenant.images = [...keptPhotos, ...photoUrls];
       tenant.description = values.description;
       tenant.theme = values.theme;
+      tenant.instagram = instagram.value;
+      tenant.facebook = facebook.value;
       advanceTo(tenant, 5);
       await tenant.save();
 
@@ -552,6 +639,7 @@ router.get('/preview', requireVerified, requireStep(6), (req, res) => {
     tenant: req.user.tenant.toObject(),
     customer: null,
     theme: themeFor(req.user.tenant.theme),
+    pricing: priceSummary(req.user.tenant.toObject()),
     preview: true
   });
 });
@@ -567,7 +655,9 @@ router.get(
     show(req, res, 'publish', 6, {
       plan,
       trialDays: TRIAL_DAYS,
-      themeLabel: themeFor(tenant.theme).label
+      themeLabel: themeFor(tenant.theme).label,
+      daysLabel,
+      hourLabel
     });
   })
 );

@@ -65,7 +65,7 @@ const mailIsConfigured = () => Boolean(getTransport());
 /* Call once when the server starts so the check above runs immediately */
 const initMail = () => { getTransport(); };
 
-async function sendMail({ to, subject, text }) {
+async function sendMail({ to, subject, text, html }) {
   const mailer = getTransport();
 
   if (!mailer) {
@@ -78,7 +78,8 @@ async function sendMail({ to, subject, text }) {
       from: process.env.MAIL_FROM || process.env.SMTP_USER || 'SquareTurf <no-reply@squareturf.com>',
       to,
       subject,
-      text
+      text,
+      ...(html ? { html } : {})
     });
     console.log(`[mail] Sent "${subject}" to ${to} (${info.messageId})`);
     return true;

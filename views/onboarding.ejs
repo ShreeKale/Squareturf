@@ -11,13 +11,14 @@
 
   const v = values || {};
   const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN');
+  const { daysLabel, hourLabel } = locals; // sent by the publish step
   const siteHost = (slug) => siteLabelFor(slug);
   const siteUrl  = (slug) => siteUrlFor(slug);
 
   const intro = {
     verify:   ['Verify your email', `We sent a 6-digit code to ${user.email}.`],
     business: ['Tell us about your turf', 'This is what customers will see on your website.'],
-    grounds:  ['Set up your ground', 'These decide which hourly slots customers can book.'],
+    grounds:  ['Set up your ground', 'Size, facilities, opening hours and prices. These decide which hourly slots customers can book.'],
     website:  ['Build your website', 'Add your branding. You can change all of this later.'],
     plan:     ['Choose your plan', 'Pick what fits today. No payment is taken during sign-up.'],
     publish:  ['Preview and publish', 'Check how your website looks, then make it live.']
@@ -80,13 +81,7 @@
                value="<%= v.name || '' %>" class="<%= inputCls %>">
       </label>
 
-      <label class="<%= labelCls %>">Sport
-        <select name="sport" class="<%= inputCls %>">
-          <% sports.forEach((s) => { %>
-            <option <%= v.sport === s ? 'selected' : '' %>><%= s %></option>
-          <% }) %>
-        </select>
-      </label>
+      <%- include('partials/sports-picker', { sportList, v }) %>
 
       <div class="sm:col-span-2">
         <label for="slug" class="<%= labelCls %>">Website address</label>
@@ -103,10 +98,7 @@
         </p>
       </div>
 
-      <label class="<%= labelCls %> sm:col-span-2">Address
-        <input name="address" required maxlength="300" autocomplete="street-address" placeholder="Street, area, city"
-               value="<%= v.address || '' %>" class="<%= inputCls %>">
-      </label>
+      <%- include('partials/map-picker', { v }) %>
 
       <label class="<%= labelCls %>">Contact phone
         <input type="tel" name="phone" required inputmode="numeric" autocomplete="tel" placeholder="98765 43210"
@@ -127,51 +119,66 @@
   <!-- ================= Step 3: ground setup ================= -->
   <form method="post" action="/onboarding/grounds" class="<%= card %> p-5 sm:p-6">
     <div class="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-      <label class="<%= labelCls %>">Number of grounds
+      <label class="<%= labelCls %> sm:col-span-2 sm:max-w-xs">Number of grounds
         <input id="groundsCount" type="number" name="groundsCount" required min="1" max="20" step="1" inputmode="numeric"
                value="<%= v.groundsCount || 1 %>" class="<%= inputCls %>">
         <span class="<%= hintCls %>">Basic includes 1 ground. More grounds need a bigger plan.</span>
       </label>
-
-      <label class="<%= labelCls %>">Price per hour
-        <div class="relative">
-          <span class="pointer-events-none absolute inset-y-0 left-0 mt-1.5 flex items-center pl-3.5 text-sm text-neutral-500">₹</span>
-          <input type="number" name="pricePerHour" required min="1" step="1" inputmode="numeric" placeholder="800"
-                 value="<%= v.pricePerHour || '' %>" class="<%= inputCls %> pl-8">
-        </div>
-      </label>
-
-      <label class="<%= labelCls %>">Opening time
-        <input id="openingTime" type="time" name="openingTime" required value="<%= v.openingTime || '06:00' %>" class="<%= inputCls %>">
-      </label>
-
-      <label class="<%= labelCls %>">Closing time
-        <input id="closingTime" type="time" name="closingTime" required value="<%= v.closingTime || '23:00' %>" class="<%= inputCls %>">
-      </label>
     </div>
 
-    <p id="slotCount" class="mt-3 text-sm text-neutral-600" aria-live="polite"></p>
-
+    <!-- Ground size and surface -->
     <fieldset class="mt-6">
-      <legend class="<%= labelCls %>">Days you are open</legend>
+      <legend class="<%= labelCls %>">Ground size</legend>
+      <div class="mt-1 grid grid-cols-[1fr_1fr_auto] gap-3">
+        <label class="text-xs font-medium text-neutral-600">Length
+          <input type="number" name="length" required min="1" max="1000" step="any" inputmode="decimal" placeholder="100"
+                 value="<%= v.length || '' %>" class="<%= inputCls %> !mt-1">
+        </label>
+        <label class="text-xs font-medium text-neutral-600">Width
+          <input type="number" name="width" required min="1" max="1000" step="any" inputmode="decimal" placeholder="60"
+                 value="<%= v.width || '' %>" class="<%= inputCls %> !mt-1">
+        </label>
+        <label class="text-xs font-medium text-neutral-600">Unit
+          <select name="unit" class="<%= inputCls %> !mt-1">
+            <% sizeUnits.forEach(([key, label]) => { %>
+              <option value="<%= key %>" <%= (v.unit || 'ft') === key ? 'selected' : '' %>><%= label %></option>
+            <% }) %>
+          </select>
+        </label>
+      </div>
+    </fieldset>
+
+    <label class="<%= labelCls %> mt-5 block sm:max-w-xs">Ground surface
+      <select name="surface" required class="<%= inputCls %>">
+        <option value="" <%= v.surface ? '' : 'selected' %> disabled>Select surface</option>
+        <% surfaces.forEach((surface) => { %>
+          <option <%= v.surface === surface ? 'selected' : '' %>><%= surface %></option>
+        <% }) %>
+      </select>
+    </label>
+
+    <!-- Facilities -->
+    <fieldset class="mt-6">
+      <legend class="<%= labelCls %>">Facilities</legend>
+      <p class="<%= hintCls %> !mt-0.5">Tick what you offer. These are shown on your website.</p>
       <div class="mt-2 flex flex-wrap gap-2">
-        <% days.forEach(([key, label]) => { %>
+        <% facilityList.forEach((facility) => { %>
           <label class="cursor-pointer">
-            <input type="checkbox" name="operatingDays" value="<%= key %>" class="peer sr-only"
-                   <%= (v.operatingDays || []).includes(key) ? 'checked' : '' %>>
-            <span class="block rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
-              <%= label.slice(0, 3) %>
+            <input type="checkbox" name="facilities" value="<%= facility.name %>" class="peer sr-only" <%= (v.facilities || []).includes(facility.name) ? 'checked' : '' %>>
+            <span class="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+              <%= facility.name %>
             </span>
           </label>
         <% }) %>
       </div>
-      <p class="mt-3 text-xs text-neutral-500">
-        Quick pick:
-        <button type="button" data-days="all" class="font-semibold text-blue-700 underline underline-offset-2">Every day</button> &middot;
-        <button type="button" data-days="weekdays" class="font-semibold text-blue-700 underline underline-offset-2">Weekdays</button> &middot;
-        <button type="button" data-days="weekend" class="font-semibold text-blue-700 underline underline-offset-2">Weekend</button>
-      </p>
     </fieldset>
+
+    <!-- Opening hours and pricing -->
+    <div class="mt-7 border-t border-neutral-200 pt-6">
+      <%- include('partials/hours-pricing', { hp: v }) %>
+    </div>
+
+    <%- include('partials/days-picker', { days, v }) %>
 
     <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
       <a href="<%= backPath %>" class="<%= ghostBtn %> text-center">Back</a>
@@ -183,52 +190,8 @@
   <!-- ================= Step 4: website setup ================= -->
   <form method="post" action="/onboarding/website" enctype="multipart/form-data" class="<%= card %> divide-y divide-neutral-200">
 
-    <!-- Logo -->
-    <section class="p-5 sm:p-6">
-      <h2 class="text-base font-bold text-neutral-900">Logo</h2>
-      <p class="mt-0.5 text-sm text-neutral-500">Square images look best. JPG, PNG or WebP. Large images are shrunk automatically.</p>
+    <%- include('partials/image-upload', { tenant, maxPhotos, maxImageMb }) %>
 
-      <div class="mt-4 flex items-center gap-4">
-        <span id="logoBox" class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-neutral-100 text-2xl font-bold text-neutral-400 ring-1 ring-neutral-200">
-          <% if (tenant.logoUrl) { %><img src="<%= tenant.logoUrl %>" alt="Current logo" class="h-full w-full object-cover"><% } else { %><%= tenant.name.charAt(0).toUpperCase() %><% } %>
-        </span>
-        <div class="min-w-0 space-y-2">
-          <input id="logoInput" type="file" name="logo" accept="image/jpeg,image/png,image/webp"
-                 class="block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-neutral-700">
-          <% if (tenant.logoUrl) { %>
-            <label class="flex items-center gap-2 text-sm text-neutral-600"><input type="checkbox" name="removeLogo" value="1" class="h-4 w-4 rounded border-neutral-300">Remove current logo</label>
-          <% } %>
-        </div>
-      </div>
-    </section>
-
-    <!-- Photos -->
-    <section class="p-5 sm:p-6">
-      <h2 class="text-base font-bold text-neutral-900">Turf photos</h2>
-      <p class="mt-0.5 text-sm text-neutral-500">Up to <%= maxPhotos %> photos for the banner slideshow. The first one is shown first. Large photos are shrunk automatically.</p>
-
-      <% if (tenant.images.length) { %>
-        <ul class="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-          <% tenant.images.forEach((url, i) => { %>
-            <li>
-              <label class="group block cursor-pointer">
-                <span class="relative block aspect-[4/3] overflow-hidden rounded-lg bg-neutral-100 ring-1 ring-neutral-200">
-                  <img src="<%= url %>" alt="Photo <%= i + 1 %>" loading="lazy" class="h-full w-full object-cover">
-                </span>
-                <span class="mt-1.5 flex items-center gap-1.5 text-xs text-neutral-600">
-                  <input type="checkbox" name="removePhotos" value="<%= url %>" class="h-3.5 w-3.5 rounded border-neutral-300">Remove
-                </span>
-              </label>
-            </li>
-          <% }) %>
-        </ul>
-      <% } %>
-
-      <input id="photosInput" type="file" name="photos" multiple accept="image/jpeg,image/png,image/webp"
-             class="mt-4 block w-full text-sm text-neutral-600 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-900 file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-white hover:file:bg-neutral-700">
-      <ul id="photoPreview" class="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4"></ul>
-      <p id="fileError" class="mt-2 hidden text-sm text-red-700" role="alert"></p>
-    </section>
 
     <!-- Description -->
     <section class="p-5 sm:p-6">
@@ -243,18 +206,34 @@
     <!-- Theme -->
     <section class="p-5 sm:p-6">
       <h2 class="text-base font-bold text-neutral-900">Colour theme</h2>
-      <p class="mt-0.5 text-sm text-neutral-500">Buttons and highlights on your website use this colour.</p>
+      <p class="mt-0.5 text-sm text-neutral-500">Buttons and highlights on your website use this colour. Dark gives your whole website a dark look.</p>
 
       <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <% Object.entries(themes).forEach(([key, theme]) => { %>
           <label class="cursor-pointer">
             <input type="radio" name="theme" value="<%= key %>" class="peer sr-only" <%= v.theme === key ? 'checked' : '' %>>
             <span class="flex items-center gap-3 rounded-xl p-3 ring-1 ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-50 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
-              <span class="h-8 w-8 shrink-0 rounded-full" style="background: <%= theme.colors[600] %>"></span>
+              <span class="h-8 w-8 shrink-0 rounded-full ring-1 ring-inset ring-black/10" style="background: <%= theme.mode === 'dark' ? 'linear-gradient(135deg, #171717 50%, ' + theme.colors[600] + ' 50%)' : theme.colors[600] %>"></span>
               <span class="text-sm font-semibold text-neutral-800"><%= theme.label %></span>
             </span>
           </label>
         <% }) %>
+      </div>
+    </section>
+
+    <!-- Social links -->
+    <section class="p-5 sm:p-6">
+      <h2 class="text-base font-bold text-neutral-900">Social links <span class="text-sm font-normal text-neutral-400">(optional)</span></h2>
+      <p class="mt-0.5 text-sm text-neutral-500">Shown in the footer of your website when you add them.</p>
+      <div class="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2">
+        <label class="<%= labelCls %>">Instagram
+          <input name="instagram" maxlength="200" placeholder="@royalturf or the profile link" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 value="<%= v.instagram || '' %>" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %>">Facebook
+          <input name="facebook" maxlength="200" placeholder="royalturf or the page link" autocapitalize="off" autocorrect="off" spellcheck="false"
+                 value="<%= v.facebook || '' %>" class="<%= inputCls %>">
+        </label>
       </div>
     </section>
 
@@ -320,6 +299,12 @@
 
   <% } else if (name === 'publish') { %>
   <!-- ================= Step 6: preview and publish ================= -->
+  <%
+    const priceLines = (tenant.pricingMode === 'custom' && tenant.pricingRules.length)
+      ? [...tenant.pricingRules.map((r) => (daysLabel(r.days)) + ', ' + hourLabel(r.startTime) + ' to ' + hourLabel(r.endTime) + ': ' + inr(r.price) + ' per hour'),
+         'Any other hour: ' + inr(tenant.pricePerHour) + ' per hour']
+      : [inr(tenant.pricePerHour) + ' per hour, every day and time'];
+  %>
   <div class="space-y-6">
 
     <!-- Summary -->
@@ -327,13 +312,18 @@
       <% [
         ['Business', '/onboarding/business', [tenant.name, tenant.sport + ' · ' + tenant.address, tenant.phone + ' · ' + tenant.email]],
         ['Ground', '/onboarding/grounds', [
-          tenant.groundsCount + (tenant.groundsCount === 1 ? ' ground' : ' grounds') + ' · ' + inr(tenant.pricePerHour) + ' per hour',
-          tenant.openingTime + ' to ' + tenant.closingTime,
+          tenant.groundsCount + (tenant.groundsCount === 1 ? ' ground' : ' grounds') +
+            (tenant.dimensions && tenant.dimensions.length ? ' · ' + tenant.dimensions.length + ' × ' + tenant.dimensions.width + ' ' + tenant.dimensions.unit : '') +
+            (tenant.surface ? ' · ' + tenant.surface : ''),
+          tenant.services.length ? 'Facilities: ' + tenant.services.map((f) => f.name).join(', ') : 'No facilities selected',
+          tenant.open24Hours ? 'Open 24 hours' : tenant.openingTime + ' to ' + tenant.closingTime,
           tenant.operatingDays.length === 7 ? 'Open every day' : 'Open ' + tenant.operatingDays.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')
         ]],
+        ['Pricing', '/onboarding/grounds', priceLines],
         ['Website', '/onboarding/website', [
           (tenant.logoUrl ? 'Logo added' : 'No logo yet') + ' · ' + tenant.images.length + (tenant.images.length === 1 ? ' photo' : ' photos'),
-          'Theme: ' + themeLabel
+          'Theme: ' + themeLabel,
+          [tenant.instagram ? 'Instagram added' : '', tenant.facebook ? 'Facebook added' : ''].filter(Boolean).join(' · ') || 'No social links'
         ]],
         ['Plan', '/onboarding/plan', [
           (plan ? plan.name + ' · ' + inr(plan.price) + ' / month' : tenant.plan),
@@ -444,150 +434,6 @@
       });
     }
 
-    /* ---------- Step 3: slot count + day shortcuts ---------- */
-    const opening = $('openingTime'), closing = $('closingTime'), slotCount = $('slotCount');
-    if (opening && closing) {
-      const minutes = (value) => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
-      const update = () => {
-        if (!opening.value || !closing.value || minutes(closing.value) <= minutes(opening.value)) {
-          slotCount.textContent = 'Closing time must be later than opening time.';
-          return;
-        }
-        const slots = Math.floor((minutes(closing.value) - minutes(opening.value)) / 60);
-        slotCount.textContent = `Customers can book ${slots} one-hour slot${slots === 1 ? '' : 's'} per day.`;
-      };
-      opening.addEventListener('input', update);
-      closing.addEventListener('input', update);
-      update();
-
-      const boxes = [...document.querySelectorAll('input[name="operatingDays"]')];
-      const sets = {
-        all: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
-        weekdays: ['mon', 'tue', 'wed', 'thu', 'fri'],
-        weekend: ['sat', 'sun']
-      };
-      document.querySelectorAll('[data-days]').forEach((button) =>
-        button.addEventListener('click', () => {
-          boxes.forEach((box) => { box.checked = sets[button.dataset.days].includes(box.value); });
-        })
-      );
-    }
-
-    /* ---------- Step 4: image previews, automatic shrinking, text counter ---------- */
-    /* Phone photos are often 5 to 10 MB. They are shrunk here before upload, because the live server
-       accepts about 4.5 MB per request in total. */
-    const fileError = $('fileError');
-    const logoInput = $('logoInput'), photosInput = $('photosInput');
-    const RAW_MAX = 25 * 1024 * 1024;     // largest original we will try to shrink
-    const TOTAL_MAX = 4 * 1024 * 1024;    // all new images together
-    let pending = 0;
-
-    function note(text, isError) {
-      fileError.textContent = text || '';
-      fileError.classList.toggle('hidden', !text);
-      fileError.classList.toggle('text-red-700', Boolean(isError));
-      fileError.classList.toggle('text-neutral-500', !isError);
-    }
-
-    async function shrink(file, maxSide, keepPng) {
-      if (!file.type.startsWith('image/') || !window.createImageBitmap) return file;
-      try {
-        const bitmap = await createImageBitmap(file);
-        const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-        const width = Math.round(bitmap.width * scale), height = Math.round(bitmap.height * scale);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
-
-        const type = keepPng && file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const blob = await new Promise((resolve) => canvas.toBlob(resolve, type, 0.82));
-        if (!blob || (scale === 1 && blob.size >= file.size)) return file;
-
-        const name = file.name.replace(/\.[^.]+$/, '') + (type === 'image/png' ? '.png' : '.jpg');
-        return new File([blob], name, { type, lastModified: Date.now() });
-      } catch (_) {
-        return file; // could not shrink: send the original
-      }
-    }
-
-    function setFiles(input, files) {
-      const list = new DataTransfer();
-      files.forEach((file) => list.items.add(file));
-      input.files = list.files;
-    }
-
-    const newBytes = () =>
-      [...(logoInput ? logoInput.files : []), ...(photosInput ? photosInput.files : [])].reduce((sum, file) => sum + file.size, 0);
-
-    /* Shrinks the chosen files, puts them back in the input, and checks the total size */
-    async function prepare(input, maxSide, keepPng) {
-      const original = [...input.files];
-      const huge = original.find((file) => file.size > RAW_MAX);
-
-      if (huge) {
-        input.value = '';
-        note(`"${huge.name}" is too large. Choose an image under 25 MB.`, true);
-        return [];
-      }
-
-      pending += 1;
-      note('Preparing your images…', false);
-      try {
-        const shrunk = await Promise.all(original.map((file) => shrink(file, maxSide, keepPng)));
-        setFiles(input, shrunk);
-      } finally {
-        pending -= 1;
-      }
-
-      if (newBytes() > TOTAL_MAX) {
-        input.value = '';
-        note('These images are still too large together. Choose fewer photos, or save them at a lower quality.', true);
-        return [];
-      }
-
-      note('', false);
-      return [...input.files];
-    }
-
-    if (logoInput) {
-      logoInput.addEventListener('change', async () => {
-        const files = await prepare(logoInput, 600, true);
-        if (!files.length) return;
-
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(files[0]);
-        img.alt = 'New logo';
-        img.className = 'h-full w-full object-cover';
-        $('logoBox').replaceChildren(img);
-      });
-    }
-
-    if (photosInput) {
-      photosInput.addEventListener('change', async () => {
-        $('photoPreview').replaceChildren();
-        const files = await prepare(photosInput, 1600, false);
-
-        $('photoPreview').replaceChildren(...files.map((file) => {
-          const li = document.createElement('li');
-          const img = document.createElement('img');
-          img.src = URL.createObjectURL(file);
-          img.alt = file.name;
-          img.className = 'aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-neutral-200';
-          li.append(img);
-          return li;
-        }));
-      });
-    }
-
-    /* Do not send the form while images are still being shrunk */
-    const imageForm = photosInput && photosInput.form;
-    if (imageForm) {
-      imageForm.addEventListener('submit', (event) => {
-        if (pending > 0) { event.preventDefault(); event.stopImmediatePropagation(); }
-      }, true);
-    }
-
     const description = $('description');
     if (description) {
       const count = $('descCount');
@@ -621,5 +467,6 @@
     );
   })();
 </script>
+
 
 <%- include('partials/foot') %>

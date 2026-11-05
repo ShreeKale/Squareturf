@@ -1,0 +1,276 @@
+<%
+  /*
+   * Opening hours and pricing fields, used in sign-up (Ground setup) and in Website settings.
+   * Pass: hp = { open24Hours, openingTime, closingTime, pricingMode, pricePerHour, pricingRules }
+   * Form fields: open24Hours, openingTime, closingTime, pricingMode, pricePerHour, pricingRules (JSON text)
+   */
+  const hpLabel = 'block text-sm font-medium text-neutral-800';
+  const hpInput = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-neutral-100 disabled:text-neutral-400';
+  const hpOpen24 = !!hp.open24Hours;
+  const hpMode = hp.pricingMode === 'custom' ? 'custom' : 'flat';
+  const hpRules = (Array.isArray(hp.pricingRules) ? hp.pricingRules : []).map((rule) => ({
+    days: Array.isArray(rule && rule.days) ? rule.days.map(String) : [],
+    startTime: String((rule && rule.startTime) || ''),
+    endTime: String((rule && rule.endTime) || ''),
+    price: (rule && rule.price) === undefined || (rule && rule.price) === null ? '' : String(rule.price)
+  }));
+  const hpMinPrice = hp.minPrice === 0 ? 0 : 1;
+%>
+
+<fieldset>
+  <legend class="<%= hpLabel %>">Opening hours</legend>
+
+  <label class="mt-2 flex cursor-pointer items-start gap-3 rounded-xl p-3.5 ring-1 ring-neutral-300 has-[:checked]:bg-neutral-50 has-[:checked]:ring-2 has-[:checked]:ring-neutral-900">
+    <input id="hpOpen24" type="checkbox" name="open24Hours" value="1" class="mt-0.5 h-4 w-4 rounded border-neutral-300" <%= hpOpen24 ? 'checked' : '' %>>
+    <span>
+      <span class="block text-sm font-semibold text-neutral-900">Open 24 hours</span>
+      <span class="mt-0.5 block text-xs text-neutral-500">Customers can book any hour of the day. You can still set different prices for different hours below.</span>
+    </span>
+  </label>
+
+  <div id="hpHours" class="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2">
+    <label class="<%= hpLabel %>">Opening time
+      <input id="hpOpening" type="time" name="openingTime" value="<%= hpOpen24 ? '06:00' : (hp.openingTime || '06:00') %>" class="<%= hpInput %>" <%= hpOpen24 ? 'disabled' : 'required' %>>
+    </label>
+    <label class="<%= hpLabel %>">Closing time
+      <input id="hpClosing" type="time" name="closingTime" value="<%= hpOpen24 ? '23:00' : (hp.closingTime || '23:00') %>" class="<%= hpInput %>" <%= hpOpen24 ? 'disabled' : 'required' %>>
+    </label>
+  </div>
+  <p id="hpSlotCount" class="mt-3 text-sm text-neutral-600" aria-live="polite"></p>
+</fieldset>
+
+<fieldset class="mt-7">
+  <legend class="<%= hpLabel %>">Pricing</legend>
+
+  <div class="mt-2 grid gap-3 sm:grid-cols-2">
+    <label class="cursor-pointer">
+      <input type="radio" name="pricingMode" value="flat" class="peer sr-only" <%= hpMode === 'flat' ? 'checked' : '' %>>
+      <span class="block h-full rounded-xl p-3.5 ring-1 ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-50 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+        <span class="block text-sm font-semibold text-neutral-900">Same price for all days and times</span>
+        <span class="mt-0.5 block text-xs text-neutral-500">One hourly price, every day.</span>
+      </span>
+    </label>
+    <label class="cursor-pointer">
+      <input type="radio" name="pricingMode" value="custom" class="peer sr-only" <%= hpMode === 'custom' ? 'checked' : '' %>>
+      <span class="block h-full rounded-xl p-3.5 ring-1 ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-50 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+        <span class="block text-sm font-semibold text-neutral-900">Different prices by day and time</span>
+        <span class="mt-0.5 block text-xs text-neutral-500">For example, night hours or weekends cost more.</span>
+      </span>
+    </label>
+  </div>
+
+  <!-- Pricing rules (only for "different prices") -->
+  <div id="hpRulesBox" class="mt-5 <%= hpMode === 'custom' ? '' : 'hidden' %>">
+    <p class="text-xs text-neutral-500">For each rule, pick the days, then the time range, then the price per hour.</p>
+    <ol id="hpRules" class="mt-3 space-y-3"></ol>
+    <p id="hpRuleNote" class="mt-2 hidden text-sm text-red-700" role="alert"></p>
+    <button type="button" id="hpAddRule" class="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2.5 text-sm font-semibold text-neutral-800 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50">
+      <span aria-hidden="true" class="text-base leading-none">+</span> Add pricing rule
+    </button>
+  </div>
+
+  <input type="hidden" id="hpRulesJson" name="pricingRules" value="">
+
+  <div class="mt-5 max-w-xs">
+    <label class="<%= hpLabel %>"><span id="hpPriceLabel">Price per hour</span>
+      <div class="relative">
+        <span class="pointer-events-none absolute inset-y-0 left-0 mt-1.5 flex items-center pl-3.5 text-sm text-neutral-500">₹</span>
+        <input id="hpPrice" type="number" name="pricePerHour" required min="<%= hpMinPrice %>" step="1" inputmode="numeric" placeholder="800"
+               value="<%= hp.pricePerHour || '' %>" class="<%= hpInput %> pl-8">
+      </div>
+    </label>
+    <p id="hpPriceHint" class="mt-1.5 hidden text-xs text-neutral-500">Used for any hour that no pricing rule covers.</p>
+  </div>
+</fieldset>
+
+<script>
+  (() => {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const initial = <%- JSON.stringify(hpRules).replace(/</g, '\\u003c') %>;
+
+    const DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+    const PRESETS = {
+      weekdays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+      weekend: ['sat', 'sun'],
+      all: DAYS.map(([key]) => key)
+    };
+    const PRESET_NAMES = [['weekdays', 'Monday to Friday'], ['weekend', 'Saturday and Sunday'], ['all', 'Every day'], ['custom', 'Choose days']];
+
+    const open24 = $('hpOpen24'), opening = $('hpOpening'), closing = $('hpClosing'), slotCount = $('hpSlotCount');
+    const rulesBox = $('hpRulesBox'), list = $('hpRules'), note = $('hpRuleNote'), json = $('hpRulesJson');
+    const priceLabel = $('hpPriceLabel'), priceHint = $('hpPriceHint');
+    const form = json.form;
+    const modes = [...form.querySelectorAll('input[name="pricingMode"]')];
+
+    const hourName = (h) => `${h % 12 || 12} ${h % 24 < 12 ? 'AM' : 'PM'}`;
+    const hourOf = (value) => { const m = /^(\d{1,2}):00$/.exec(value || ''); return m ? Number(m[1]) : null; };
+    const timeOf = (h) => `${String(h).padStart(2, '0')}:00`;
+
+    /* ---------- Opening hours ---------- */
+    const minutes = (value) => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
+    function updateHours() {
+      const all = open24.checked;
+      opening.disabled = closing.disabled = all;
+      opening.required = closing.required = !all;
+
+      if (all) {
+        slotCount.textContent = 'Customers can book 24 one-hour slots every day.';
+      } else if (!opening.value || !closing.value || minutes(closing.value) <= minutes(opening.value)) {
+        slotCount.textContent = 'Closing time must be later than opening time.';
+      } else {
+        const slots = Math.floor((minutes(closing.value) - minutes(opening.value)) / 60);
+        slotCount.textContent = `Customers can book ${slots} one-hour slot${slots === 1 ? '' : 's'} per day.`;
+      }
+    }
+    [open24, opening, closing].forEach((input) => input.addEventListener('input', updateHours));
+    updateHours();
+
+    /* ---------- Pricing rules ---------- */
+    const sameDays = (a, b) => a.length === b.length && a.every((day) => b.includes(day));
+    const presetOf = (days) => Object.keys(PRESETS).find((key) => sameDays(days, PRESETS[key])) || 'custom';
+
+    function option(value, label, selected) {
+      const o = document.createElement('option');
+      o.value = value; o.textContent = label; o.selected = selected;
+      return o;
+    }
+
+    function addRule(rule) {
+      const days = rule && rule.days && rule.days.length ? rule.days : PRESETS.weekdays;
+      const preset = presetOf(days);
+      const from = hourOf(rule && rule.startTime);
+      const to = hourOf(rule && rule.endTime);
+
+      const row = document.createElement('li');
+      row.className = 'rounded-xl bg-neutral-50 p-3.5 ring-1 ring-neutral-200 sm:p-4';
+      row.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm font-semibold text-neutral-900" data-title></p>
+          <button type="button" data-remove class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Remove</button>
+        </div>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <label class="block text-xs font-medium text-neutral-600 sm:col-span-2">Days
+            <select data-f="preset" class="mt-1 block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"></select>
+          </label>
+          <div data-days class="flex flex-wrap gap-1.5 sm:col-span-2"></div>
+          <label class="block text-xs font-medium text-neutral-600">From
+            <select data-f="from" class="mt-1 block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"></select>
+          </label>
+          <label class="block text-xs font-medium text-neutral-600">To
+            <select data-f="to" class="mt-1 block w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"></select>
+          </label>
+          <label class="block text-xs font-medium text-neutral-600 sm:col-span-2">Price per hour
+            <span class="relative mt-1 block">
+              <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm text-neutral-500">₹</span>
+              <input data-f="price" type="number" min="1" step="1" inputmode="numeric" placeholder="1000"
+                     class="block w-full rounded-lg border border-neutral-300 bg-white py-2.5 pl-7 pr-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100">
+            </span>
+          </label>
+        </div>`;
+
+      const q = (name) => row.querySelector(`[data-f="${name}"]`);
+      PRESET_NAMES.forEach(([key, label]) => q('preset').append(option(key, label, key === preset)));
+      for (let h = 0; h <= 23; h += 1) q('from').append(option(timeOf(h), hourName(h), h === (from === null ? 6 : from)));
+      for (let h = 1; h <= 24; h += 1) q('to').append(option(timeOf(h), h === 24 ? '12 AM (midnight)' : hourName(h), h === (to === null ? 18 : to)));
+      q('price').value = rule && rule.price ? rule.price : '';
+
+      /* Custom day pills */
+      const dayBox = row.querySelector('[data-days]');
+      DAYS.forEach(([key, label]) => {
+        const pill = document.createElement('label');
+        pill.className = 'cursor-pointer';
+        pill.innerHTML = `<input type="checkbox" value="${key}" class="peer sr-only">
+          <span class="block rounded-full px-3 py-1.5 text-xs font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-white peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">${label}</span>`;
+        const box = pill.querySelector('input');
+        box.checked = days.includes(key);
+        box.addEventListener('input', refresh);
+        dayBox.append(pill);
+      });
+
+      const syncDays = () => {
+        const p = q('preset').value;
+        dayBox.classList.toggle('hidden', p !== 'custom');
+        if (p !== 'custom') dayBox.querySelectorAll('input').forEach((box) => { box.checked = PRESETS[p].includes(box.value); });
+      };
+      q('preset').addEventListener('input', () => { syncDays(); refresh(); });
+      syncDays();
+
+      row.querySelector('[data-remove]').addEventListener('click', () => { row.remove(); refresh(); });
+      row.addEventListener('input', refresh);
+      list.append(row);
+      refresh();
+    }
+
+    function readRules() {
+      return [...list.children].map((row) => ({
+        days: [...row.querySelectorAll('[data-days] input:checked')].map((box) => box.value),
+        startTime: row.querySelector('[data-f="from"]').value,
+        endTime: row.querySelector('[data-f="to"]').value,
+        price: row.querySelector('[data-f="price"]').value
+      }));
+    }
+
+    /* Returns a message when the rules are not usable yet, or '' when they are fine */
+    function check(rules) {
+      for (let i = 0; i < rules.length; i += 1) {
+        const r = rules[i];
+        if (!r.days.length) return `Pricing rule ${i + 1}: select at least one day.`;
+        if (hourOf(r.endTime) <= hourOf(r.startTime)) return `Pricing rule ${i + 1}: the end time must be later than the start time.`;
+        if (!(Number(r.price) >= 1)) return `Pricing rule ${i + 1}: enter the price per hour.`;
+      }
+      for (let a = 0; a < rules.length; a += 1) {
+        for (let b = a + 1; b < rules.length; b += 1) {
+          const shared = rules[a].days.some((day) => rules[b].days.includes(day));
+          if (shared && rules[a].startTime < rules[b].endTime && rules[b].startTime < rules[a].endTime) {
+            return `Pricing rules ${a + 1} and ${b + 1} overlap. Change the days or the times.`;
+          }
+        }
+      }
+      return '';
+    }
+
+    const custom = () => modes.find((radio) => radio.checked).value === 'custom';
+
+    function refresh() {
+      [...list.children].forEach((row, i) => { row.querySelector('[data-title]').textContent = `Pricing rule ${i + 1}`; });
+
+      const isCustom = custom();
+      rulesBox.classList.toggle('hidden', !isCustom);
+      priceLabel.textContent = isCustom ? 'Price for all other hours' : 'Price per hour';
+      priceHint.classList.toggle('hidden', !isCustom);
+
+      const rules = readRules();
+      json.value = JSON.stringify(rules);
+      const problem = isCustom ? check(rules) : '';
+      /* Do not scold about an empty price while the owner is still filling the rule in */
+      note.textContent = problem;
+      note.classList.toggle('hidden', !problem);
+      return problem;
+    }
+
+    modes.forEach((radio) => radio.addEventListener('input', () => {
+      if (custom() && !list.children.length) addRule();
+      refresh();
+    }));
+    $('hpAddRule').addEventListener('click', () => {
+      const last = readRules().slice(-1)[0];
+      const start = last && hourOf(last.endTime) < 24 ? hourOf(last.endTime) : 0;
+      addRule({ days: last ? last.days : PRESETS.weekdays, startTime: timeOf(start), endTime: timeOf(Math.min(start + 6, 24)), price: '' });
+    });
+
+    form.addEventListener('submit', (event) => {
+      const problem = refresh();
+      if (problem) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        note.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }, true);
+
+    initial.forEach(addRule);
+    if (custom() && !list.children.length) addRule();
+    refresh();
+  })();
+</script>

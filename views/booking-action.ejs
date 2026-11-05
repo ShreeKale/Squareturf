@@ -1,0 +1,64 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  const tone = { confirm: 'bg-green-600 hover:bg-green-700', paid: 'bg-blue-600 hover:bg-blue-700', cancel: 'bg-red-600 hover:bg-red-700', unpaid: 'bg-neutral-600 hover:bg-neutral-700' };
+  const question = {
+    confirm: 'Confirm this booking? The customer will get a confirmation email.',
+    paid: 'Mark this booking as paid?',
+    cancel: 'Cancel this booking? The time becomes free for others.',
+    unpaid: 'Mark this booking as unpaid?'
+  };
+  const statusBadge = status === 'Confirmed' ? 'bg-green-50 text-green-700 ring-green-600/20'
+    : status === 'Cancelled' ? 'bg-red-50 text-red-700 ring-red-600/20'
+    : 'bg-amber-50 text-amber-700 ring-amber-600/20';
+%>
+
+<div class="mx-auto w-full max-w-xl py-6 sm:py-12">
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-8">
+    <p class="text-sm font-semibold text-neutral-500"><%= tenant.name %></p>
+    <h1 class="mt-1 text-2xl font-extrabold tracking-tight">Booking request</h1>
+
+    <% if (message) { %>
+      <p class="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm font-medium text-green-800 ring-1 ring-green-600/20" role="status"><%= message %></p>
+    <% } %>
+    <% if (error) { %>
+      <p class="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-red-600/20" role="alert"><%= error %></p>
+    <% } %>
+
+    <dl class="mt-5 divide-y divide-neutral-200 border-y border-neutral-200 text-sm">
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Customer</dt><dd class="text-right font-semibold"><%= customer.name %></dd></div>
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Phone</dt><dd class="text-right font-semibold"><a href="tel:<%= customer.phone %>" class="text-blue-700"><%= customer.phone %></a></dd></div>
+      <% if (customer.email) { %>
+        <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Email</dt><dd class="min-w-0 break-all text-right font-semibold"><%= customer.email %></dd></div>
+      <% } %>
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Slots</dt><dd class="text-right font-semibold"><% info.lines.forEach((line) => { %><span class="block"><%= line %></span><% }) %></dd></div>
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Duration</dt><dd class="text-right font-semibold"><%= info.hours %> <%= info.hours === 1 ? 'hour' : 'hours' %></dd></div>
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Total</dt><dd class="text-right text-base font-extrabold">₹<%= Number(info.total).toLocaleString('en-IN') %></dd></div>
+      <div class="flex items-center justify-between gap-4 py-3"><dt class="text-neutral-500">Status</dt><dd><span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset <%= statusBadge %>"><%= status %></span></dd></div>
+      <div class="flex justify-between gap-4 py-3"><dt class="text-neutral-500">Payment</dt><dd class="text-right font-semibold"><%= payment %></dd></div>
+    </dl>
+
+    <% if (!message && !error) { %>
+      <!-- The action from the email button, waiting for one tap -->
+      <form method="post" action="/booking-action/<%= requestId %>/<%= action %>" class="mt-6 rounded-xl bg-neutral-50 p-4 ring-1 ring-neutral-200">
+        <input type="hidden" name="t" value="<%= token %>">
+        <p class="text-sm font-medium text-neutral-800"><%= question[action] %></p>
+        <button type="submit" class="mt-3 w-full rounded-lg px-4 py-3 text-sm font-semibold text-white <%= tone[action] %>"><%= actions[action].label %></button>
+      </form>
+    <% } %>
+
+    <p class="mt-6 text-xs font-semibold uppercase tracking-wide text-neutral-500"><%= message || error ? 'Do something else' : 'Other actions' %></p>
+    <div class="mt-2 grid grid-cols-2 gap-2">
+      <% Object.keys(actions).forEach((key) => { if (key === action && !message && !error) return; %>
+        <form method="post" action="/booking-action/<%= requestId %>/<%= key %>">
+          <input type="hidden" name="t" value="<%= token %>">
+          <button type="submit" class="w-full rounded-lg px-3 py-2.5 text-sm font-semibold text-white <%= tone[key] %>"><%= actions[key].label %></button>
+        </form>
+      <% }) %>
+    </div>
+
+    <a href="/dashboard/bookings" class="mt-6 block text-center text-sm font-semibold text-blue-700 underline underline-offset-2">Open my dashboard</a>
+  </div>
+</div>
+
+<%- include('partials/foot') %>

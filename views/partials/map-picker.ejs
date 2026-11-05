@@ -1,0 +1,211 @@
+<%
+  /* Shared look (same as the sign-up and settings pages) */
+  const labelCls = 'block text-sm font-medium text-neutral-800';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+  const hintCls  = 'mt-1.5 block text-xs font-normal text-neutral-500';
+  /* Pass: v = { lat, lng, address } . Fields: lat, lng, address (required) */
+%>
+<div>
+        <span class="<%= labelCls %>">Turf location</span>
+        <p class="<%= hintCls %> !mt-0.5">Search for your turf, tap the map, or drag the pin to the exact spot. Customers use this to find you.</p>
+
+        <div class="relative mt-2">
+          <div class="flex gap-2">
+            <input id="mapSearch" type="search" placeholder="Search area, landmark or city" autocomplete="off" maxlength="120"
+                   class="block min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100">
+            <button type="button" id="mapSearchBtn" class="shrink-0 rounded-lg bg-neutral-900 px-4 py-3 text-sm font-semibold text-white hover:bg-neutral-700">Search</button>
+            <button type="button" id="mapLocate" class="shrink-0 rounded-lg px-3.5 py-3 text-sm font-semibold text-neutral-700 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50" title="Use my current location" aria-label="Use my current location">
+              <i data-lucide="locate-fixed" class="h-4 w-4"></i>
+            </button>
+          </div>
+          <ul id="mapResults" class="absolute inset-x-0 top-full z-[1100] mt-1 hidden max-h-60 overflow-auto rounded-lg bg-white py-1 text-sm shadow-lg ring-1 ring-neutral-200" role="listbox"></ul>
+        </div>
+
+        <div class="relative mt-3">
+            <div id="turfMap" class="relative z-0 h-72 w-full overflow-hidden rounded-xl bg-neutral-100 ring-1 ring-neutral-300 sm:h-80" style="isolation: isolate"></div>
+          <!-- Map / Satellite switch -->
+          <div class="absolute left-3 top-3 z-[1000] inline-flex rounded-lg bg-white p-0.5 text-xs font-semibold shadow ring-1 ring-black/10" role="group" aria-label="Map type">
+            <button type="button" data-maptype="street" aria-pressed="true" class="rounded-md bg-neutral-900 px-3 py-1.5 text-white">Map</button>
+            <button type="button" data-maptype="satellite" aria-pressed="false" class="rounded-md px-3 py-1.5 text-neutral-700">Satellite</button>
+          </div>
+        </div>
+        <p id="mapStatus" class="<%= hintCls %>" aria-live="polite">Loading the map…</p>
+
+        <input type="hidden" id="turfLat" name="lat" value="<%= v.lat %>">
+        <input type="hidden" id="turfLng" name="lng" value="<%= v.lng %>">
+
+        <label class="<%= labelCls %> mt-4 block">Address
+          <input id="turfAddress" name="address" required maxlength="300" autocomplete="street-address" placeholder="Filled in when you pick a spot on the map"
+                 value="<%= v.address || '' %>" class="<%= inputCls %>">
+          <span class="<%= hintCls %>">Filled in from the map. You can edit it if needed.</span>
+        </label>
+      </div>
+
+<!-- Map picker (Leaflet + OpenStreetMap, search by Nominatim) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<script>
+  (() => {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+    const mapEl = $('turfMap'), status = $('mapStatus');
+    const latInput = $('turfLat'), lngInput = $('turfLng'), address = $('turfAddress');
+    const form = mapEl.closest('form');
+    /* Older turfs have no pin yet, so the settings page does not insist on one for them (pinRequired: false) */
+    const REQUIRED = <%- JSON.stringify(!(v && v.pinRequired === false)) %>;
+
+    const say = (text, bad) => {
+      status.textContent = text;
+      status.className = `mt-1.5 block text-xs ${bad ? 'font-medium text-red-700' : 'font-normal text-neutral-500'}`;
+    };
+
+    if (!window.L) {
+      say('The map could not be loaded. Check your internet connection and refresh the page.', true);
+      form.addEventListener('submit', (event) => { if (REQUIRED && !latInput.value) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+      return;
+    }
+
+    const NOMINATIM = 'https://nominatim.openstreetmap.org';
+    const INDIA = [22.5, 79];
+    const start = latInput.value && lngInput.value ? [Number(latInput.value), Number(lngInput.value)] : null;
+
+    const map = L.map(mapEl, { zoomControl: true, scrollWheelZoom: false }).setView(start || INDIA, start ? 16 : 5);
+    const street = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+    });
+    /* Satellite photos (Esri World Imagery) with road and place names on top, so the turf is easy to spot */
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      maxNativeZoom: 18,
+      attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics'
+    });
+    const labels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      maxNativeZoom: 18
+    });
+    street.addTo(map);
+
+    document.querySelectorAll('[data-maptype]').forEach((button) =>
+      button.addEventListener('click', () => {
+        const sat = button.dataset.maptype === 'satellite';
+        [street, satellite, labels].forEach((layer) => map.hasLayer(layer) && map.removeLayer(layer));
+        (sat ? [satellite, labels] : [street]).forEach((layer) => layer.addTo(map));
+        document.querySelectorAll('[data-maptype]').forEach((other) => {
+          const on = other === button;
+          other.setAttribute('aria-pressed', String(on));
+          other.className = `rounded-md px-3 py-1.5 ${on ? 'bg-neutral-900 text-white' : 'text-neutral-700'}`;
+        });
+      })
+    );
+    map.on('focus', () => map.scrollWheelZoom.enable());
+    map.on('blur', () => map.scrollWheelZoom.disable());
+
+    const pin = L.divIcon({
+      className: '',
+      iconSize: [34, 44],
+      iconAnchor: [17, 42],
+      html: '<svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 1C8.7 1 2 7.6 2 15.8 2 27 17 43 17 43s15-16 15-27.2C32 7.6 25.3 1 17 1z" fill="#dc2626" stroke="#fff" stroke-width="2"/><circle cx="17" cy="16" r="5.5" fill="#fff"/></svg>'
+    });
+    let marker = null;
+    let geoToken = 0;
+
+    function place(lat, lng, { zoom, text } = {}) {
+      lat = Math.round(lat * 1e6) / 1e6; lng = Math.round(lng * 1e6) / 1e6;
+      latInput.value = lat; lngInput.value = lng;
+
+      if (marker) marker.setLatLng([lat, lng]);
+      else {
+        marker = L.marker([lat, lng], { icon: pin, draggable: true, keyboard: true, title: 'Drag to move the pin' }).addTo(map);
+        marker.on('dragend', () => { const p = marker.getLatLng(); place(p.lat, p.lng, { reverse: true }); });
+      }
+      if (zoom) map.setView([lat, lng], zoom);
+
+      if (text) { address.value = text.slice(0, 300); say('Location pinned. You can drag the pin to adjust it.'); }
+      else lookup(lat, lng);
+    }
+
+    /* Address for the pin (reverse geocoding) */
+    async function lookup(lat, lng) {
+      const token = ++geoToken;
+      say('Finding the address…');
+      try {
+        const response = await fetch(`${NOMINATIM}/reverse?format=jsonv2&zoom=18&accept-language=en&lat=${lat}&lon=${lng}`);
+        const data = await response.json();
+        if (token !== geoToken) return;
+        if (data && data.display_name) { address.value = data.display_name.slice(0, 300); say('Location pinned. You can drag the pin to adjust it.'); }
+        else say('Location pinned. We could not find an address here, so please type it in the address box.', true);
+      } catch (_) {
+        if (token === geoToken) say('Location pinned. We could not look up the address, so please type it in the address box.', true);
+      }
+    }
+
+    map.on('click', (event) => place(event.latlng.lat, event.latlng.lng));
+
+    if (start) { place(start[0], start[1], { text: address.value || undefined }); if (address.value) say('Location pinned. You can drag the pin to adjust it.'); }
+    else say('Search above, or tap the map to place the pin.');
+
+    /* Search */
+    const results = $('mapResults'), search = $('mapSearch');
+    const closeResults = () => { results.classList.add('hidden'); results.replaceChildren(); };
+
+    async function runSearch() {
+      const query = search.value.trim();
+      if (query.length < 3) { say('Type at least 3 letters to search.', true); return; }
+      say('Searching…');
+      try {
+        const response = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=6&countrycodes=in&accept-language=en&q=${encodeURIComponent(query)}`);
+        const found = await response.json();
+        if (!found.length) { closeResults(); say('Nothing found. Try a nearby landmark or the city name, or tap the map.', true); return; }
+
+        results.replaceChildren(...found.map((item) => {
+          const li = document.createElement('li');
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'block w-full px-3.5 py-2.5 text-left text-neutral-800 hover:bg-neutral-100';
+          button.textContent = item.display_name;
+          button.addEventListener('click', () => {
+            closeResults();
+            place(Number(item.lat), Number(item.lon), { zoom: 17, text: item.display_name });
+          });
+          li.append(button);
+          return li;
+        }));
+        results.classList.remove('hidden');
+        say('Choose a result, then drag the pin to the exact spot.');
+      } catch (_) {
+        say('Search is not available right now. Tap the map to place the pin.', true);
+      }
+    }
+
+    $('mapSearchBtn').addEventListener('click', runSearch);
+    search.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); runSearch(); } if (event.key === 'Escape') closeResults(); });
+    document.addEventListener('click', (event) => { if (!results.contains(event.target) && event.target !== $('mapSearchBtn')) closeResults(); });
+
+    /* Current location */
+    $('mapLocate').addEventListener('click', () => {
+      if (!navigator.geolocation) { say('Your browser cannot share your location. Search or tap the map instead.', true); return; }
+      say('Getting your location…');
+      navigator.geolocation.getCurrentPosition(
+        (position) => place(position.coords.latitude, position.coords.longitude, { zoom: 17 }),
+        () => say('We could not get your location. Allow location access, or search instead.', true),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+
+    /* A spot is needed before saving */
+    form.addEventListener('submit', (event) => {
+      if (REQUIRED && (!latInput.value || !lngInput.value)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        say('Please pick your turf location on the map.', true);
+        mapEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }, true);
+
+    /* The map can be measured wrongly while the page is still laying out */
+    setTimeout(() => map.invalidateSize(), 300);
+    window.addEventListener('load', () => map.invalidateSize());
+  })();
+</script>

@@ -1,0 +1,249 @@
+<%- include('partials/head', { title }) %>
+
+<%
+  /* Everything the owner entered while signing up can be changed here. */
+  const labelCls = 'block text-sm font-medium text-neutral-800';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+  const hintCls  = 'mt-1.5 block text-xs font-normal text-neutral-500';
+  const card     = 'scroll-mt-24 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-neutral-200 sm:p-6';
+  const h2Cls    = 'text-lg font-bold text-neutral-900';
+  const v = values || {};
+
+  const sections = [['business', 'Business'], ['location', 'Location'], ['ground', 'Ground'], ['pricing', 'Hours & pricing'], ['website', 'Website'], ['links', 'Links & policy']];
+%>
+
+<div class="mx-auto max-w-4xl">
+  <div class="mb-6">
+    <a href="/dashboard" class="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900">
+      <i data-lucide="arrow-left" class="h-4 w-4"></i>Dashboard
+    </a>
+    <div class="mt-3 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 class="text-3xl font-extrabold tracking-tight text-neutral-900">Website settings</h1>
+        <p class="mt-1 text-neutral-600">Change anything you entered while signing up. Your website updates as soon as you save.</p>
+      </div>
+      <a href="<%= siteUrlFor(tenant.slug) %>" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-neutral-700 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50">
+        View my website <i data-lucide="external-link" class="h-4 w-4"></i>
+      </a>
+    </div>
+
+    <nav class="mt-4 flex flex-wrap gap-2" aria-label="Sections">
+      <% sections.forEach(([id, label]) => { %>
+        <a href="#<%= id %>" class="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold text-neutral-700 ring-1 ring-inset ring-neutral-300 hover:bg-neutral-50"><%= label %></a>
+      <% }) %>
+    </nav>
+  </div>
+
+  <% if (error) { %>
+    <div role="alert" class="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <i data-lucide="circle-alert" class="mt-0.5 h-4 w-4 shrink-0"></i><span><%= error %></span>
+    </div>
+  <% } %>
+  <% if (flash) { %>
+    <div role="status" class="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><%= flash %></div>
+  <% } %>
+
+  <form method="post" action="/dashboard/website" enctype="multipart/form-data" class="space-y-6">
+
+    <!-- Business -->
+    <section id="business" class="<%= card %>">
+      <h2 class="<%= h2Cls %>">Business</h2>
+      <div class="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2">
+        <label class="<%= labelCls %> sm:col-span-2">Turf or business name
+          <input name="name" required maxlength="120" value="<%= v.name || '' %>" class="<%= inputCls %>">
+        </label>
+
+        <div class="sm:col-span-2">
+          <label for="slug" class="<%= labelCls %>">Website address</label>
+          <div class="mt-1.5 flex items-stretch overflow-hidden rounded-lg border border-neutral-300 bg-white focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-100">
+            <% if (!useSubdomains) { %><span class="flex items-center bg-neutral-50 px-3.5 text-sm text-neutral-500"><%= siteLabelFor('') %></span><% } %>
+            <input id="slug" name="slug" required minlength="3" maxlength="40" autocapitalize="off" autocorrect="off" spellcheck="false"
+                   value="<%= v.slug || '' %>" data-original="<%= tenant.slug %>"
+                   class="min-w-0 flex-1 border-0 bg-transparent px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400">
+            <% if (useSubdomains) { %><span class="flex items-center bg-neutral-50 px-3.5 text-sm text-neutral-500">.<%= baseDomain %></span><% } %>
+          </div>
+          <p id="slugStatus" class="<%= hintCls %>" aria-live="polite">Changing this changes your website link, so share the new link with your customers.</p>
+        </div>
+
+        <%- include('partials/sports-picker', { sportList, v }) %>
+
+        <label class="<%= labelCls %>">Contact phone
+          <input type="tel" name="phone" required inputmode="numeric" value="<%= v.phone || '' %>" placeholder="98765 43210" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %>">Contact email
+          <input type="email" name="email" required value="<%= v.email || '' %>" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %> sm:col-span-2">WhatsApp number <span class="font-normal text-neutral-400">(optional)</span>
+          <input name="whatsapp" type="tel" inputmode="numeric" value="<%= v.whatsapp || '' %>" placeholder="98765 43210" class="<%= inputCls %> sm:max-w-xs">
+          <span class="<%= hintCls %>">If empty, your contact phone is used for WhatsApp.</span>
+        </label>
+
+        <label class="<%= labelCls %> sm:col-span-2">About your turf
+          <textarea id="description" name="description" rows="5" maxlength="1000" class="<%= inputCls %> resize-y"><%= v.description || '' %></textarea>
+          <span class="mt-1 block text-right text-xs text-neutral-500"><span id="descCount">0</span> / 1000</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Location -->
+    <section id="location" class="<%= card %>">
+      <h2 class="<%= h2Cls %>">Location</h2>
+      <div class="mt-4">
+        <%- include('partials/map-picker', { v: Object.assign({}, v, { pinRequired: v.lat !== '' && v.lat != null }) }) %>
+        <label class="<%= labelCls %> mt-5 block">Google Maps link <span class="font-normal text-neutral-400">(optional)</span>
+          <input name="mapUrl" value="<%= v.mapUrl || '' %>" placeholder="https://maps.app.goo.gl/..." class="<%= inputCls %>">
+          <span class="<%= hintCls %>">If empty, the spot you pinned on the map is used for directions.</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Ground -->
+    <section id="ground" class="<%= card %>">
+      <h2 class="<%= h2Cls %>">Ground</h2>
+
+      <label class="<%= labelCls %> mt-4 block sm:max-w-xs">Number of grounds
+        <input type="number" name="groundsCount" required min="1" max="20" step="1" inputmode="numeric" value="<%= v.groundsCount || 1 %>" class="<%= inputCls %>">
+        <span class="<%= hintCls %>">Your <%= planName %> plan includes <%= maxGrounds %> ground<%= maxGrounds === 1 ? '' : 's' %>.</span>
+      </label>
+
+      <fieldset class="mt-6">
+        <legend class="<%= labelCls %>">Ground size</legend>
+        <div class="mt-1 grid grid-cols-[1fr_1fr_auto] gap-3">
+          <label class="text-xs font-medium text-neutral-600">Length
+            <input type="number" name="length" min="1" max="1000" step="any" inputmode="decimal" placeholder="100" value="<%= v.length || '' %>" class="<%= inputCls %> !mt-1">
+          </label>
+          <label class="text-xs font-medium text-neutral-600">Width
+            <input type="number" name="width" min="1" max="1000" step="any" inputmode="decimal" placeholder="60" value="<%= v.width || '' %>" class="<%= inputCls %> !mt-1">
+          </label>
+          <label class="text-xs font-medium text-neutral-600">Unit
+            <select name="unit" class="<%= inputCls %> !mt-1">
+              <% sizeUnits.forEach(([key, label]) => { %>
+                <option value="<%= key %>" <%= (v.unit || 'ft') === key ? 'selected' : '' %>><%= label %></option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+      </fieldset>
+
+      <label class="<%= labelCls %> mt-5 block sm:max-w-xs">Ground surface
+        <select name="surface" class="<%= inputCls %>">
+          <option value="" <%= v.surface ? '' : 'selected' %>>Not set</option>
+          <% surfaces.forEach((surface) => { %>
+            <option <%= v.surface === surface ? 'selected' : '' %>><%= surface %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <fieldset class="mt-6">
+        <legend class="<%= labelCls %>">Facilities</legend>
+        <p class="<%= hintCls %> !mt-0.5">Tick what you offer. These are shown on your website.</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <% facilityList.forEach((facility) => { %>
+            <label class="cursor-pointer">
+              <input type="checkbox" name="facilities" value="<%= facility.name %>" class="peer sr-only" <%= (v.facilities || []).includes(facility.name) ? 'checked' : '' %>>
+              <span class="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+                <%= facility.name %>
+              </span>
+            </label>
+          <% }) %>
+        </div>
+      </fieldset>
+
+      <div class="mt-6">
+        <%- include('partials/days-picker', { days, v }) %>
+      </div>
+    </section>
+
+    <!-- Hours and pricing -->
+    <section id="pricing" class="<%= card %>">
+      <h2 class="<%= h2Cls %>">Hours &amp; pricing</h2>
+      <div class="mt-4">
+        <%- include('partials/hours-pricing', { hp: Object.assign({}, v, { minPrice: 0 }) }) %>
+      </div>
+    </section>
+
+    <!-- Website: logo, photos, theme -->
+    <section id="website" class="<%= card %> !p-0">
+      <div class="divide-y divide-neutral-200">
+        <%- include('partials/image-upload', { tenant, maxPhotos, maxImageMb }) %>
+
+        <section class="p-5 sm:p-6">
+          <h2 class="text-base font-bold text-neutral-900">Colour theme</h2>
+          <p class="mt-0.5 text-sm text-neutral-500">Buttons and highlights on your website use this colour. Dark gives your whole website a dark look.</p>
+          <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <% Object.entries(themes).forEach(([key, theme]) => { %>
+              <label class="cursor-pointer">
+                <input type="radio" name="theme" value="<%= key %>" class="peer sr-only" <%= v.theme === key ? 'checked' : '' %>>
+                <span class="flex items-center gap-3 rounded-xl p-3 ring-1 ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-50 peer-checked:ring-2 peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+                  <span class="h-8 w-8 shrink-0 rounded-full ring-1 ring-inset ring-black/10" style="background: <%= theme.mode === 'dark' ? 'linear-gradient(135deg, #171717 50%, ' + theme.colors[600] + ' 50%)' : theme.colors[600] %>"></span>
+                  <span class="text-sm font-semibold text-neutral-800"><%= theme.label %></span>
+                </span>
+              </label>
+            <% }) %>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- Links and policy -->
+    <section id="links" class="<%= card %>">
+      <h2 class="<%= h2Cls %>">Links &amp; policy</h2>
+      <p class="mt-1 text-sm text-neutral-500">These show in the footer of your website. Leave Facebook empty to hide it.</p>
+      <div class="mt-4 grid gap-x-4 gap-y-5 sm:grid-cols-2">
+        <label class="<%= labelCls %>">Instagram
+          <input name="instagram" maxlength="200" value="<%= v.instagram || '' %>" placeholder="@royalturf or the profile link" autocapitalize="off" autocorrect="off" spellcheck="false" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %>">Facebook
+          <input name="facebook" maxlength="200" value="<%= v.facebook || '' %>" placeholder="royalturf or the page link" autocapitalize="off" autocorrect="off" spellcheck="false" class="<%= inputCls %>">
+        </label>
+        <label class="<%= labelCls %> sm:col-span-2">Cancellation and refund policy
+          <textarea name="refundPolicy" rows="6" maxlength="1500" placeholder="One rule per line. If empty, a standard policy is shown." class="<%= inputCls %>"><%= v.refundPolicy || '' %></textarea>
+        </label>
+      </div>
+    </section>
+
+    <button type="submit" class="w-full rounded-lg bg-neutral-900 px-5 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-400">Save website settings</button>
+  </form>
+</div>
+
+<script>
+  (() => {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+
+    /* Website address: live availability check (the server checks again on save) */
+    const slug = $('slug'), status = $('slugStatus');
+    const idle = status.textContent;
+    let timer = null;
+    const clean = (value) => value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').slice(0, 40);
+
+    async function check() {
+      const value = slug.value;
+      if (value === slug.dataset.original || value.length < 3) { status.textContent = idle; status.className = 'mt-1.5 block text-xs font-normal text-neutral-500'; return; }
+      try {
+        const response = await fetch(`/onboarding/slug-check?slug=${encodeURIComponent(value)}`);
+        const data = await response.json();
+        if (slug.value !== value) return;
+        status.textContent = data.message;
+        status.className = `mt-1.5 block text-xs font-medium ${data.available ? 'text-green-700' : 'text-red-700'}`;
+      } catch (_) { /* the server checks again on save */ }
+    }
+    slug.addEventListener('input', () => { slug.value = clean(slug.value); clearTimeout(timer); timer = setTimeout(check, 400); });
+
+    /* Description counter */
+    const description = $('description'), count = $('descCount');
+    const update = () => { count.textContent = description.value.length; };
+    description.addEventListener('input', update);
+    update();
+
+    /* Stops double clicks while saving */
+    const form = slug.form;
+    form.addEventListener('submit', () => {
+      const button = form.querySelector('button[type="submit"]');
+      if (!button || !form.checkValidity()) return;
+      setTimeout(() => { button.disabled = true; button.textContent = 'Saving…'; }, 0);
+    });
+  })();
+</script>
+
+<%- include('partials/foot') %>

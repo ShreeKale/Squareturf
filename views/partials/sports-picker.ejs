@@ -1,0 +1,49 @@
+<%
+  /* Shared look (same as the sign-up and settings pages) */
+  const labelCls = 'block text-sm font-medium text-neutral-800';
+  const inputCls = 'mt-1.5 block w-full rounded-lg border border-neutral-300 bg-white px-3.5 py-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100';
+  const hintCls  = 'mt-1.5 block text-xs font-normal text-neutral-500';
+  /* Pass: sportList (all sports), v = { sports: [ticked], otherSport } . Fields: sports, otherSport */
+%>
+<fieldset class="sm:col-span-2">
+        <legend class="<%= labelCls %>">Sports you offer</legend>
+        <p class="<%= hintCls %> !mt-0.5">Select all that apply, up to 6.</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <% sportList.forEach((sport) => { %>
+            <label class="cursor-pointer">
+              <input type="checkbox" name="sports" value="<%= sport %>" class="peer sr-only" <%= (v.sports || []).includes(sport) ? 'checked' : '' %>>
+              <span class="block rounded-full px-4 py-2 text-sm font-semibold text-neutral-600 ring-1 ring-inset ring-neutral-300 transition-colors hover:bg-neutral-50 peer-checked:bg-neutral-900 peer-checked:text-white peer-checked:ring-neutral-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600">
+                <%= sport %>
+              </span>
+            </label>
+          <% }) %>
+        </div>
+        <div id="otherSportBox" class="mt-3 max-w-sm <%= (v.sports || []).includes('Other') ? '' : 'hidden' %>">
+          <label class="<%= labelCls %>">Other sport name
+            <input name="otherSport" maxlength="120" placeholder="Padel, Kabaddi" value="<%= v.otherSport || '' %>" class="<%= inputCls %>">
+            <span class="<%= hintCls %>">Separate more than one with a comma.</span>
+          </label>
+        </div>
+      </fieldset>
+
+<script>
+  (() => {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    /* ---------- Step 2: "Other" sport box ---------- */
+    const sportBoxes = [...document.querySelectorAll('input[name="sports"]')];
+    const otherBox = $('otherSportBox');
+    if (otherBox) {
+      const other = sportBoxes.find((box) => box.value === 'Other');
+      const MAX_SPORTS = 6;
+      const sync = () => {
+        otherBox.classList.toggle('hidden', !other.checked);
+        const full = sportBoxes.filter((box) => box.checked).length >= MAX_SPORTS;
+        sportBoxes.forEach((box) => { if (!box.checked) box.disabled = full; });
+      };
+      sportBoxes.forEach((box) => box.addEventListener('input', sync));
+      sync();
+    }
+
+  })();
+</script>
